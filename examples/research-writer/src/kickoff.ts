@@ -5,9 +5,9 @@
  * Usage:
  *   npx ts-node src/kickoff.ts "summarize diffusion models"
  */
-import { AgentMail } from "agentmail";
+import { AgentMailbox } from "agentmailbox";
 
-const SERVER = process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
+const SERVER = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
 const ME = "user@demo";
 const RESEARCHER = "researcher@demo";
 const WRITER = "writer@demo";
@@ -17,7 +17,7 @@ const TIMEOUT_MS = 120_000;
 async function main(): Promise<void> {
   const task = process.argv.slice(2).join(" ") || "summarize diffusion models";
 
-  const agent = new AgentMail({ agentId: ME, server: SERVER });
+  const agent = new AgentMailbox({ agentId: ME, server: SERVER });
   await agent.connect();
   process.stdout.write(`[kickoff] dispatching task to ${RESEARCHER}: ${task}\n`);
 

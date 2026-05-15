@@ -1,4 +1,4 @@
-"""AgentMail Python SDK — async client and sync wrapper."""
+"""AgentMailbox Python SDK — async client and sync wrapper."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import httpx
 
 from . import _codec
 from .exceptions import (
-    AgentMailError,
-    ConnectionError as AgentMailConnectionError,
+    AgentMailboxError,
+    ConnectionError as AgentMailboxConnectionError,
     NotFoundError,
     ServerError,
 )
@@ -41,16 +41,16 @@ def _raise_for_status(method: str, path: str, resp: httpx.Response) -> None:
     if resp.is_success:
         return
     body = resp.text
-    msg = f"AgentMail {method} {path} failed: {resp.status_code} {body}"
+    msg = f"AgentMailbox {method} {path} failed: {resp.status_code} {body}"
     if resp.status_code == 404:
         raise NotFoundError(msg, status_code=resp.status_code)
     if resp.status_code >= 500:
         raise ServerError(msg, status_code=resp.status_code)
-    raise AgentMailError(msg, status_code=resp.status_code)
+    raise AgentMailboxError(msg, status_code=resp.status_code)
 
 
-class AgentMail:
-    """Async AgentMail client. Talks to the AgentMail HTTP server."""
+class AgentMailbox:
+    """Async AgentMailbox client. Talks to the AgentMailbox HTTP server."""
 
     def __init__(
         self,
@@ -85,12 +85,12 @@ class AgentMail:
         try:
             resp = await self._client.request(method, path, json=json)
         except httpx.ConnectError as exc:
-            raise AgentMailConnectionError(
-                f"cannot connect to AgentMail server at {self.server}: {exc}"
+            raise AgentMailboxConnectionError(
+                f"cannot connect to AgentMailbox server at {self.server}: {exc}"
             ) from exc
         except httpx.RequestError as exc:
-            raise AgentMailConnectionError(
-                f"AgentMail {method} {path} request failed: {exc}"
+            raise AgentMailboxConnectionError(
+                f"AgentMailbox {method} {path} request failed: {exc}"
             ) from exc
         _raise_for_status(method, path, resp)
         data = resp.json() if resp.content else {}
@@ -101,7 +101,7 @@ class AgentMail:
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "AgentMail":
+    async def __aenter__(self) -> "AgentMailbox":
         return self
 
     async def __aexit__(
@@ -206,12 +206,12 @@ class AgentMail:
         await self._request("POST", path, _ignore, json={"threadId": thread_id})
 
 
-class AgentMailSync:
-    """Sync wrapper around :class:`AgentMail` for non-async code paths.
+class AgentMailboxSync:
+    """Sync wrapper around :class:`AgentMailbox` for non-async code paths.
 
     Each call drives a fresh event loop with :func:`asyncio.run`. Suitable
     for scripts and notebooks; for performance-sensitive code use
-    :class:`AgentMail` directly.
+    :class:`AgentMailbox` directly.
     """
 
     def __init__(
@@ -229,8 +229,8 @@ class AgentMailSync:
         self.api_key = api_key
         self.timeout = timeout
 
-    def _new_client(self) -> AgentMail:
-        return AgentMail(
+    def _new_client(self) -> AgentMailbox:
+        return AgentMailbox(
             self.agent_id,
             server=self.server,
             api_key=self.api_key,

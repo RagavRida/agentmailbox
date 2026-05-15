@@ -1,6 +1,6 @@
-"""Multi-agent (CC/BCC/ReplyAll) demo for the AgentMail Python SDK.
+"""Multi-agent (CC/BCC/ReplyAll) demo for the AgentMailbox Python SDK.
 
-Mirrors examples/multi-agent.ts. Run after starting the AgentMail server.
+Mirrors examples/multi-agent.ts. Run after starting the AgentMailbox server.
 """
 
 from __future__ import annotations
@@ -8,17 +8,17 @@ from __future__ import annotations
 import asyncio
 import os
 
-from agentmail import AgentMail
+from agentmailbox import AgentMailbox
 
 
-SERVER = os.environ.get("AGENTMAIL_SERVER", "http://localhost:3000")
+SERVER = os.environ.get("AGENTMAILBOX_SERVER", "http://localhost:3000")
 
 
 async def main() -> None:
     # Orchestrator sends to Researcher.
     # CC: Writer (watching, will jump in).
     # BCC: Logger (silent audit trail).
-    async with AgentMail("orchestrator@demo", server=SERVER) as orchestrator:
+    async with AgentMailbox("orchestrator@demo", server=SERVER) as orchestrator:
         await orchestrator.connect()
         sent = await orchestrator.send(
             "researcher@demo",
@@ -37,7 +37,7 @@ async def main() -> None:
         }
 
     # Researcher picks up — sees writer in CC, does NOT see logger in bcc.
-    async with AgentMail("researcher@demo", server=SERVER) as researcher:
+    async with AgentMailbox("researcher@demo", server=SERVER) as researcher:
         await researcher.connect()
         inbound = await researcher.receive()
         print(f"[researcher] unread: {len(inbound.messages)}")
@@ -61,7 +61,7 @@ async def main() -> None:
         assert set(replied.delivered_to) == {"orchestrator@demo", "writer@demo"}
 
     # Writer was CC'd — picks up full updated context.
-    async with AgentMail("writer@demo", server=SERVER) as writer:
+    async with AgentMailbox("writer@demo", server=SERVER) as writer:
         await writer.connect()
         writer_inbox = await writer.receive()
         print(f"[writer] context.snapshot: {writer_inbox.context.snapshot}")
@@ -72,7 +72,7 @@ async def main() -> None:
         }
 
     # Logger was BCC'd — silently received the original message.
-    async with AgentMail("logger@demo", server=SERVER) as logger:
+    async with AgentMailbox("logger@demo", server=SERVER) as logger:
         await logger.connect()
         logger_unread = await logger.unread()
         print(f"[logger] unread: {len(logger_unread)}")
@@ -84,7 +84,7 @@ async def main() -> None:
         assert only.payload == {"task": "find 50 papers on diffusion models"}
 
     # Participants endpoint — orchestrator (the bcc'er) sees logger.
-    async with AgentMail("orchestrator@demo", server=SERVER) as orchestrator:
+    async with AgentMailbox("orchestrator@demo", server=SERVER) as orchestrator:
         await orchestrator.connect()
         orch_view = await orchestrator.participants(thread_id)
         print(
@@ -94,13 +94,13 @@ async def main() -> None:
         assert any(p.agent_id == "logger@demo" and p.role == "bcc" for p in orch_view)
 
     # Writer (CC'd, not the bcc'er) does NOT see logger.
-    async with AgentMail("writer@demo", server=SERVER) as writer:
+    async with AgentMailbox("writer@demo", server=SERVER) as writer:
         writer_view = await writer.participants(thread_id)
         print("[writer] participants:", [(p.agent_id, p.role) for p in writer_view])
         assert not any(p.agent_id == "logger@demo" for p in writer_view)
 
     # Logger sees themselves.
-    async with AgentMail("logger@demo", server=SERVER) as logger:
+    async with AgentMailbox("logger@demo", server=SERVER) as logger:
         logger_view = await logger.participants(thread_id)
         print("[logger] participants:", [(p.agent_id, p.role) for p in logger_view])
         assert any(p.agent_id == "logger@demo" for p in logger_view)

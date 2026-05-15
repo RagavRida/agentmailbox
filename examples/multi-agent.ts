@@ -1,12 +1,12 @@
-import { AgentMail } from "../src/agentmail";
+import { AgentMailbox } from "../src/agentmailbox";
 
 async function main() {
-  const server = process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
+  const server = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
 
   // Orchestrator sends to Researcher
   // CC: Writer (watching, will jump in)
   // BCC: Logger (silent audit trail)
-  const orchestrator = new AgentMail({
+  const orchestrator = new AgentMailbox({
     agentId: "orchestrator@demo",
     server,
   });
@@ -26,7 +26,7 @@ async function main() {
 
   // Researcher picks up — sees orchestrator sent it, writer is CC.
   // Does NOT see logger in bcc.
-  const researcher = new AgentMail({
+  const researcher = new AgentMailbox({
     agentId: "researcher@demo",
     server,
   });
@@ -54,14 +54,14 @@ async function main() {
   console.log("[researcher] replyAll delivered to:", replied.deliveredTo);
 
   // Writer was CC'd — picks up full context.
-  const writer = new AgentMail({ agentId: "writer@demo", server });
+  const writer = new AgentMailbox({ agentId: "writer@demo", server });
   await writer.connect();
   const writerInbox = await writer.receive();
   console.log("[writer] context.snapshot:", writerInbox.context.snapshot);
   console.log("[writer] unread count:", writerInbox.messages.length);
 
   // Logger was BCC'd — silently received the original message.
-  const logger = new AgentMail({ agentId: "logger@demo", server });
+  const logger = new AgentMailbox({ agentId: "logger@demo", server });
   await logger.connect();
   const loggerUnread = await logger.unread();
   console.log("[logger] unread count:", loggerUnread.length);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { AgentMail } from "../../dist/agentmail";
+import { AgentMailbox } from "../../dist/agentmailbox";
 
 import { buildServer } from "./server";
 
@@ -36,25 +36,25 @@ function parseArgs(argv: string[]): Partial<Config> {
 
 function printUsage(): void {
   process.stderr.write(
-    "usage: agentmail-mcp [--agent-id ID] [--server URL] [--api-key KEY]\n" +
-      "env: AGENTMAIL_AGENT_ID, AGENTMAIL_SERVER, AGENTMAIL_API_KEY\n"
+    "usage: agentmailbox-mcp [--agent-id ID] [--server URL] [--api-key KEY]\n" +
+      "env: AGENTMAILBOX_AGENT_ID, AGENTMAILBOX_SERVER, AGENTMAILBOX_API_KEY\n"
   );
 }
 
 function die(msg: string): never {
-  process.stderr.write(`agentmail-mcp: ${msg}\n`);
+  process.stderr.write(`agentmailbox-mcp: ${msg}\n`);
   process.exit(1);
 }
 
 function resolveConfig(): Config {
   const args = parseArgs(process.argv.slice(2));
-  const agentId = args.agentId ?? process.env.AGENTMAIL_AGENT_ID ?? "";
+  const agentId = args.agentId ?? process.env.AGENTMAILBOX_AGENT_ID ?? "";
   const server =
-    args.server ?? process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
-  const apiKey = args.apiKey ?? process.env.AGENTMAIL_API_KEY;
+    args.server ?? process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
+  const apiKey = args.apiKey ?? process.env.AGENTMAILBOX_API_KEY;
   if (!agentId) {
     die(
-      "AGENTMAIL_AGENT_ID is required (or pass --agent-id). " +
+      "AGENTMAILBOX_AGENT_ID is required (or pass --agent-id). " +
         "This identifies the agent this MCP server represents."
     );
   }
@@ -63,7 +63,7 @@ function resolveConfig(): Config {
 
 async function main(): Promise<void> {
   const cfg = resolveConfig();
-  const agent = new AgentMail({
+  const agent = new AgentMailbox({
     agentId: cfg.agentId,
     server: cfg.server,
     apiKey: cfg.apiKey,
@@ -73,14 +73,14 @@ async function main(): Promise<void> {
     await agent.connect();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    die(`cannot reach AgentMail server at ${cfg.server}: ${msg}`);
+    die(`cannot reach AgentMailbox server at ${cfg.server}: ${msg}`);
   }
 
   const server = buildServer(agent);
   const transport = new StdioServerTransport();
 
   const shutdown = async (signal: string): Promise<void> => {
-    process.stderr.write(`agentmail-mcp: ${signal} received, shutting down\n`);
+    process.stderr.write(`agentmailbox-mcp: ${signal} received, shutting down\n`);
     try {
       await server.close();
     } catch {
@@ -93,12 +93,12 @@ async function main(): Promise<void> {
 
   await server.connect(transport);
   process.stderr.write(
-    `agentmail-mcp: connected as ${cfg.agentId} -> ${cfg.server}\n`
+    `agentmailbox-mcp: connected as ${cfg.agentId} -> ${cfg.server}\n`
   );
 }
 
 main().catch((err: unknown) => {
   const msg = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`agentmail-mcp: fatal: ${msg}\n`);
+  process.stderr.write(`agentmailbox-mcp: fatal: ${msg}\n`);
   process.exit(1);
 });

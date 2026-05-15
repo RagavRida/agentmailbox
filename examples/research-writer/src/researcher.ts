@@ -3,10 +3,10 @@
  * calls Claude to "find papers", then sends results to the writer
  * with a contextSnapshot describing what it just did.
  */
-import { AgentMail } from "agentmail";
+import { AgentMailbox } from "agentmailbox";
 import { complete } from "./llm";
 
-const SERVER = process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
+const SERVER = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
 const ME = "researcher@demo";
 const WRITER = "writer@demo";
 const POLL_MS = 1500;
@@ -17,7 +17,7 @@ interface TaskPayload {
 }
 
 async function handleTask(
-  agent: AgentMail,
+  agent: AgentMailbox,
   threadId: string,
   from: string,
   payload: TaskPayload
@@ -53,7 +53,7 @@ async function handleTask(
 }
 
 async function main(): Promise<void> {
-  const agent = new AgentMail({ agentId: ME, server: SERVER });
+  const agent = new AgentMailbox({ agentId: ME, server: SERVER });
   await agent.connect();
   process.stdout.write(`[researcher] online at ${SERVER}\n`);
 

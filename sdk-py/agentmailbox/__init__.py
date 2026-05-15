@@ -1,12 +1,12 @@
-"""AgentMail Python SDK.
+"""AgentMailbox Python SDK.
 
 Context-sync protocol for AI agents. Every agent has a mailbox.
 No agent ever starts cold.
 """
 
-from .client import AgentMail, AgentMailSync
+from .client import AgentMailbox, AgentMailboxSync
 from .exceptions import (
-    AgentMailError,
+    AgentMailboxError,
     ConnectionError,
     NotFoundError,
     ServerError,
@@ -25,9 +25,9 @@ from .types import (
 __version__ = "0.1.0"
 
 __all__ = [
-    "AgentMail",
-    "AgentMailSync",
-    "AgentMailError",
+    "AgentMailbox",
+    "AgentMailboxSync",
+    "AgentMailboxError",
     "ConnectionError",
     "NotFoundError",
     "ServerError",

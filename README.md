@@ -1,43 +1,43 @@
-# AgentMail
+# AgentMailbox
 
 Context-sync protocol for AI agents.
 Every agent has a mailbox. No agent ever starts cold.
 
-[![npm](https://img.shields.io/npm/v/agentmail.svg?label=npm%20agentmail)](https://www.npmjs.com/package/agentmail)
-[![PyPI](https://img.shields.io/pypi/v/agentmail.svg?label=PyPI%20agentmail)](https://pypi.org/project/agentmail/)
-[![npm mcp](https://img.shields.io/npm/v/agentmail-mcp.svg?label=npm%20agentmail-mcp)](https://www.npmjs.com/package/agentmail-mcp)
-[![CI](https://github.com/RagavRida/agentmail/actions/workflows/ci.yml/badge.svg)](https://github.com/RagavRida/agentmail/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/agentmailbox.svg?label=npm%20agentmailbox)](https://www.npmjs.com/package/agentmailbox)
+[![PyPI](https://img.shields.io/pypi/v/agentmailbox.svg?label=PyPI%20agentmailbox)](https://pypi.org/project/agentmailbox/)
+[![npm mcp](https://img.shields.io/npm/v/agentmailbox-mcp.svg?label=npm%20agentmailbox-mcp)](https://www.npmjs.com/package/agentmailbox-mcp)
+[![CI](https://github.com/RagavRida/agentmailbox/actions/workflows/ci.yml/badge.svg)](https://github.com/RagavRida/agentmailbox/actions/workflows/ci.yml)
 
 ## Install
 
 ```bash
 # JavaScript / TypeScript SDK + server
-npm install agentmail
+npm install agentmailbox
 
 # Python SDK
-pip install agentmail
+pip install agentmailbox
 
 # MCP adapter (Claude Desktop, Cursor, Continue, ...)
-npm install -g agentmail-mcp
+npm install -g agentmailbox-mcp
 ```
 
 ## Start the server
 
 ```bash
-npx agentmail-server
+npx agentmailbox-server
 # or, from a clone:
 npm run start
 ```
 
-Defaults: `http://localhost:3000`, SQLite at `./agentmail.db`.
-Override with `PORT` and `AGENTMAIL_DB` env vars.
+Defaults: `http://localhost:3000`, SQLite at `./agentmailbox.db`.
+Override with `PORT` and `AGENTMAILBOX_DB` env vars.
 
 ## Quick Start
 
 ```ts
-import { AgentMail } from "agentmail";
+import { AgentMailbox } from "agentmailbox";
 
-const researcher = new AgentMail({
+const researcher = new AgentMailbox({
   agentId: "researcher@demo",
   server: "http://localhost:3000",
 });
@@ -50,7 +50,7 @@ const { threadId } = await researcher.send(
 );
 
 // Writer — picks up full context even after restart.
-const writer = new AgentMail({
+const writer = new AgentMailbox({
   agentId: "writer@demo",
   server: "http://localhost:3000",
 });
@@ -76,21 +76,21 @@ npm run example       # two-agent flow
 
 ## Authentication
 
-Set `AGENTMAIL_API_KEY` on the server and pass `apiKey` to the SDK to
+Set `AGENTMAILBOX_API_KEY` on the server and pass `apiKey` to the SDK to
 require auth. With the env var unset the server is open (current
 behaviour). With it set, every route except `/health` requires
 `Authorization: Bearer <key>` — missing or wrong returns 401.
 
 ```bash
-AGENTMAIL_API_KEY=s3cret npx agentmail-server
+AGENTMAILBOX_API_KEY=s3cret npx agentmailbox-server
 ```
 
 ```ts
-new AgentMail({ agentId: "x@demo", server: "...", apiKey: "s3cret" });
+new AgentMailbox({ agentId: "x@demo", server: "...", apiKey: "s3cret" });
 ```
 
 ```python
-AgentMail("x@demo", server="...", api_key="s3cret")
+AgentMailbox("x@demo", server="...", api_key="s3cret")
 ```
 
 ## Multi-Agent Threads
@@ -132,19 +132,19 @@ process restart, see [`examples/research-writer/`](./examples/research-writer/RE
 
 ## MCP adapter
 
-`agentmail-mcp` exposes the protocol to any MCP-aware client (Claude
+`agentmailbox-mcp` exposes the protocol to any MCP-aware client (Claude
 Desktop, Cursor, Continue, ...) as a set of tools — no SDK or glue
 code in the client.
 
 ```json
 {
   "mcpServers": {
-    "agentmail": {
+    "agentmailbox": {
       "command": "npx",
-      "args": ["-y", "agentmail-mcp"],
+      "args": ["-y", "agentmailbox-mcp"],
       "env": {
-        "AGENTMAIL_AGENT_ID": "claude@local",
-        "AGENTMAIL_SERVER": "http://localhost:3000"
+        "AGENTMAILBOX_AGENT_ID": "claude@local",
+        "AGENTMAILBOX_SERVER": "http://localhost:3000"
       }
     }
   }
@@ -167,10 +167,10 @@ See [`mcp/README.md`](./mcp/README.md) for the full tool list.
 | GET    | `/threads/:threadId/sync`              | Assembled context (snapshot + recent 10)      |
 | GET    | `/threads/:threadId/participants`      | Visible participants with roles               |
 
-## Why AgentMail
+## Why AgentMailbox
 
 Agents today lose context between runs, restarts, and handoffs.
-AgentMail makes context persistence the protocol — not an afterthought.
+AgentMailbox makes context persistence the protocol — not an afterthought.
 
 Every message carries:
 - the recipient agent's full inbox thread

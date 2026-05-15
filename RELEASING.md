@@ -1,4 +1,4 @@
-# Releasing AgentMail 0.1.0
+# Releasing AgentMailbox 0.1.0
 
 Reference commands for the human cutting the first release. **Do not
 let CI run these — review the PR, then run them manually.**
@@ -13,10 +13,10 @@ let CI run these — review the PR, then run them manually.**
   - `sdk-py/pyproject.toml`
 - Logged into `npm whoami` and `twine` (or have a `~/.pypirc`).
 
-## npm (`agentmail`)
+## npm (`agentmailbox`)
 
 ```bash
-cd ~/agentmail
+cd ~/agentmailbox
 npm ci
 npm run build
 npm test
@@ -24,20 +24,20 @@ npm pack --dry-run    # inspect the file list — should be dist/, README, LICEN
 npm publish --access public
 ```
 
-## npm (`agentmail-mcp`)
+## npm (`agentmailbox-mcp`)
 
 ```bash
-cd ~/agentmail/mcp
+cd ~/agentmailbox/mcp
 npm ci
 npm run build
 npm pack --dry-run
 npm publish --access public
 ```
 
-## PyPI (`agentmail`)
+## PyPI (`agentmailbox`)
 
 ```bash
-cd ~/agentmail/sdk-py
+cd ~/agentmailbox/sdk-py
 python -m venv .venv
 .venv/bin/pip install --upgrade pip build twine
 .venv/bin/python -m build
@@ -58,15 +58,15 @@ Smoke test from a fresh directory on a fresh machine:
 
 ```bash
 # JS server + SDK
-npx -y agentmail-server &
+npx -y agentmailbox-server &
 sleep 2 && curl -sf http://localhost:3000/health
 
 # Python SDK
-pip install agentmail
-python -c "from agentmail import AgentMail; print('ok')"
+pip install agentmailbox
+python -c "from agentmailbox import AgentMailbox; print('ok')"
 
 # MCP adapter
-npx -y agentmail-mcp --help
+npx -y agentmailbox-mcp --help
 ```
 
 If any of those fail, yank the bad version (`npm unpublish` within 72h,

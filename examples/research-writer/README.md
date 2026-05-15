@@ -1,6 +1,6 @@
 # Research + Writer demo
 
-Three long-running agents talking over AgentMail:
+Three long-running agents talking over AgentMailbox:
 
 - **`user@demo`** (`kickoff.ts`) — sends one task and prints the final draft.
 - **`researcher@demo`** (`researcher.ts`) — turns the task into a list of papers.
@@ -14,11 +14,11 @@ piece of context lives on the thread.
 ## Setup
 
 ```bash
-cd ~/agentmail/examples/research-writer
+cd ~/agentmailbox/examples/research-writer
 npm install
 ```
 
-This pulls in the local `agentmail` package via `file:../..` plus the
+This pulls in the local `agentmailbox` package via `file:../..` plus the
 Anthropic SDK. If `ANTHROPIC_API_KEY` is set, the agents call Claude;
 otherwise they print a clearly-labelled stub response so the demo
 still runs offline.
@@ -26,17 +26,17 @@ still runs offline.
 ## Run it (four terminals)
 
 ```bash
-# Terminal 1 — start the AgentMail server
-cd ~/agentmail && npm start
+# Terminal 1 — start the AgentMailbox server
+cd ~/agentmailbox && npm start
 
 # Terminal 2 — researcher loop
-cd ~/agentmail/examples/research-writer && npm run researcher
+cd ~/agentmailbox/examples/research-writer && npm run researcher
 
 # Terminal 3 — writer loop
-cd ~/agentmail/examples/research-writer && npm run writer
+cd ~/agentmailbox/examples/research-writer && npm run writer
 
 # Terminal 4 — kick off one task
-cd ~/agentmail/examples/research-writer && npm run kickoff -- "summarize diffusion models"
+cd ~/agentmailbox/examples/research-writer && npm run kickoff -- "summarize diffusion models"
 ```
 
 You should see the researcher pick up the task, then the writer pick

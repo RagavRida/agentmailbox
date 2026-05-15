@@ -1,15 +1,15 @@
 {
-  "name": "agentmail-research-writer-demo",
+  "name": "agentmailbox-research-writer-demo",
   "version": "0.1.0",
   "private": true,
-  "description": "Three-agent demo for AgentMail with real LLM calls and a cold-restart story.",
+  "description": "Three-agent demo for AgentMailbox with real LLM calls and a cold-restart story.",
   "scripts": {
     "researcher": "ts-node src/researcher.ts",
     "writer": "ts-node src/writer.ts",
     "kickoff": "ts-node src/kickoff.ts"
   },
   "dependencies": {
-    "agentmail": "file:../..",
+    "agentmailbox": "file:../..",
     "@anthropic-ai/sdk": "^0.27.0"
   },
   "devDependencies": {

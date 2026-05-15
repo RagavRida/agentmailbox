@@ -1,12 +1,12 @@
-"""Exception hierarchy for the AgentMail Python SDK."""
+"""Exception hierarchy for the AgentMailbox Python SDK."""
 
 from __future__ import annotations
 
 from typing import Optional
 
 
-class AgentMailError(Exception):
-    """Base class for all AgentMail SDK errors."""
+class AgentMailboxError(Exception):
+    """Base class for all AgentMailbox SDK errors."""
 
     def __init__(self, message: str, status_code: Optional[int] = None) -> None:
         super().__init__(message)
@@ -19,13 +19,13 @@ class AgentMailError(Exception):
         return self.message
 
 
-class NotFoundError(AgentMailError):
+class NotFoundError(AgentMailboxError):
     """Raised on HTTP 404 responses (missing thread, agent, etc.)."""
 
 
-class ServerError(AgentMailError):
-    """Raised on HTTP 5xx responses from the AgentMail server."""
+class ServerError(AgentMailboxError):
+    """Raised on HTTP 5xx responses from the AgentMailbox server."""
 
 
-class ConnectionError(AgentMailError):
-    """Raised when the SDK cannot reach the AgentMail server."""
+class ConnectionError(AgentMailboxError):
+    """Raised when the SDK cannot reach the AgentMailbox server."""

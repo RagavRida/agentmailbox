@@ -1,10 +1,10 @@
-import { AgentMail } from "../src/agentmail";
+import { AgentMailbox } from "../src/agentmailbox";
 
 async function main() {
-  const server = process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
+  const server = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
 
   // ResearchAgent
-  const researcher = new AgentMail({
+  const researcher = new AgentMailbox({
     agentId: "researcher@demo",
     server,
   });
@@ -18,7 +18,7 @@ async function main() {
   console.log("[researcher] sent on thread:", threadId);
 
   // WriterAgent — picks up full context even after restart
-  const writer = new AgentMail({
+  const writer = new AgentMailbox({
     agentId: "writer@demo",
     server,
   });

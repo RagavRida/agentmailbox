@@ -1,9 +1,9 @@
 {
-  "name": "agentmail-mcp",
+  "name": "agentmailbox-mcp",
   "version": "0.1.0",
-  "description": "MCP server adapter for AgentMail",
+  "description": "MCP server adapter for AgentMailbox",
   "bin": {
-    "agentmail-mcp": "dist/index.js"
+    "agentmailbox-mcp": "dist/index.js"
   },
   "main": "dist/index.js",
   "type": "commonjs",
@@ -14,14 +14,14 @@
   ],
   "scripts": {
     "build:parent": "cd .. && npm install --no-audit --no-fund && npm run build",
-    "postinstall": "node -e \"const fs=require('fs');if(!fs.existsSync('../dist/agentmail.js')){require('child_process').execSync('npm run build:parent',{stdio:'inherit'});}\"",
+    "postinstall": "node -e \"const fs=require('fs');if(!fs.existsSync('../dist/agentmailbox.js')){require('child_process').execSync('npm run build:parent',{stdio:'inherit'});}\"",
     "build": "tsc && node scripts/finalize.js",
     "start": "ts-node src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector ts-node src/index.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "agentmail",
+    "agentmailbox",
     "mcp",
     "model-context-protocol",
     "agents",
@@ -29,12 +29,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/RagavRida/agentmail.git",
+    "url": "https://github.com/RagavRida/agentmailbox.git",
     "directory": "mcp"
   },
-  "homepage": "https://github.com/RagavRida/agentmail/tree/main/mcp",
+  "homepage": "https://github.com/RagavRida/agentmailbox/tree/main/mcp",
   "bugs": {
-    "url": "https://github.com/RagavRida/agentmail/issues"
+    "url": "https://github.com/RagavRida/agentmailbox/issues"
   },
   "license": "MIT",
   "engines": {

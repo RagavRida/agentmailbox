@@ -1,8 +1,8 @@
-"""Two-agent demo for the AgentMail Python SDK.
+"""Two-agent demo for the AgentMailbox Python SDK.
 
-Mirrors examples/basic.ts. Run after starting the AgentMail server:
+Mirrors examples/basic.ts. Run after starting the AgentMailbox server:
 
-    cd ~/agentmail && npm run start
+    cd ~/agentmailbox && npm run start
     python sdk-py/examples/basic.py
 """
 
@@ -11,15 +11,15 @@ from __future__ import annotations
 import asyncio
 import os
 
-from agentmail import AgentMail
+from agentmailbox import AgentMailbox
 
 
-SERVER = os.environ.get("AGENTMAIL_SERVER", "http://localhost:3000")
+SERVER = os.environ.get("AGENTMAILBOX_SERVER", "http://localhost:3000")
 
 
 async def main() -> None:
     # ResearchAgent
-    async with AgentMail("researcher@demo", server=SERVER) as researcher:
+    async with AgentMailbox("researcher@demo", server=SERVER) as researcher:
         await researcher.connect()
         result = await researcher.send(
             "writer@demo",
@@ -30,7 +30,7 @@ async def main() -> None:
         print(f"[researcher] sent on thread: {thread_id}")
 
     # WriterAgent — cold start, picks up full context
-    async with AgentMail("writer@demo", server=SERVER) as writer:
+    async with AgentMailbox("writer@demo", server=SERVER) as writer:
         await writer.connect()
         inbound = await writer.receive()
         print(f"[writer] unread messages: {len(inbound.messages)}")
@@ -50,7 +50,7 @@ async def main() -> None:
         await writer.mark_read(thread_id)
 
     # Researcher syncs updated context
-    async with AgentMail("researcher@demo", server=SERVER) as researcher:
+    async with AgentMailbox("researcher@demo", server=SERVER) as researcher:
         await researcher.connect()
         context = await researcher.sync(thread_id)
         print(f"[researcher] synced snapshot: {context.snapshot}")

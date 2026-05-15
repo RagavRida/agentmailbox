@@ -1,4 +1,4 @@
-"""Internal: JSON ↔ dataclass conversion for the AgentMail wire format.
+"""Internal: JSON ↔ dataclass conversion for the AgentMailbox wire format.
 
 The server speaks camelCase and uses ``from`` for the sender field. Python
 dataclasses use snake_case and ``from_agent``. This module owns the mapping.

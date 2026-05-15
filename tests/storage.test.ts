@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v4 as uuidv4 } from "uuid";
 import { rmSync } from "node:fs";
 
-import { AgentMailStorage } from "../src/storage";
+import { AgentMailboxStorage } from "../src/storage";
 import { Message } from "../src/types";
 import { freshDb } from "./setup";
 
-let storage: AgentMailStorage;
+let storage: AgentMailboxStorage;
 let dbDir: string;
 
 function makeMessage(
@@ -32,7 +32,7 @@ function makeMessage(
 beforeEach(() => {
   const db = freshDb();
   dbDir = db.dir;
-  storage = new AgentMailStorage(db.path);
+  storage = new AgentMailboxStorage(db.path);
   storage.init();
 });
 
@@ -41,7 +41,7 @@ afterEach(() => {
   rmSync(dbDir, { recursive: true, force: true });
 });
 
-describe("AgentMailStorage", () => {
+describe("AgentMailboxStorage", () => {
   it("registerAgent is idempotent", () => {
     const a = storage.registerAgent("alice@demo");
     const b = storage.registerAgent("alice@demo");

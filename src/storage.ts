@@ -30,10 +30,10 @@ interface ThreadRow {
   updated_at: number;
 }
 
-export class AgentMailStorage {
+export class AgentMailboxStorage {
   private db: Database.Database;
 
-  constructor(path = "agentmail.db") {
+  constructor(path = "agentmailbox.db") {
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");

@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import express, { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { AgentMailStorage } from "./storage";
+import { AgentMailboxStorage } from "./storage";
 import { assembleContext } from "./context";
 import {
   AgentAddress,
@@ -88,13 +88,13 @@ export interface CreateServerOptions {
 }
 
 export function createServer(
-  dbPath = "agentmail.db",
+  dbPath = "agentmailbox.db",
   opts: CreateServerOptions = {}
 ) {
-  const storage = new AgentMailStorage(dbPath);
+  const storage = new AgentMailboxStorage(dbPath);
   storage.init();
 
-  const apiKey = opts.apiKey ?? process.env.AGENTMAIL_API_KEY ?? "";
+  const apiKey = opts.apiKey ?? process.env.AGENTMAILBOX_API_KEY ?? "";
 
   const app = express();
   app.use(express.json({ limit: "10mb" }));
@@ -330,7 +330,7 @@ export function createServer(
   });
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[agentmail] error:", err);
+    console.error("[agentmailbox] error:", err);
     res.status(500).json({ error: err.message ?? "internal error" });
   });
 
@@ -339,10 +339,10 @@ export function createServer(
 
 if (require.main === module) {
   const port = Number(process.env.PORT ?? 3000);
-  const dbPath = process.env.AGENTMAIL_DB ?? "agentmail.db";
+  const dbPath = process.env.AGENTMAILBOX_DB ?? "agentmailbox.db";
   const { app } = createServer(dbPath);
   app.listen(port, () => {
-    console.log(`[agentmail] server listening on http://localhost:${port}`);
-    console.log(`[agentmail] db: ${dbPath}`);
+    console.log(`[agentmailbox] server listening on http://localhost:${port}`);
+    console.log(`[agentmailbox] db: ${dbPath}`);
   });
 }

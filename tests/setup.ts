@@ -14,8 +14,8 @@ export interface TestServer {
 }
 
 export function freshDb(): { dir: string; path: string } {
-  const dir = mkdtempSync(join(tmpdir(), "agentmail-test-"));
-  return { dir, path: join(dir, "agentmail.db") };
+  const dir = mkdtempSync(join(tmpdir(), "agentmailbox-test-"));
+  return { dir, path: join(dir, "agentmailbox.db") };
 }
 
 export async function startServer(

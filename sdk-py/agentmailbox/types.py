@@ -1,4 +1,4 @@
-"""Dataclass mirrors of the AgentMail wire types."""
+"""Dataclass mirrors of the AgentMailbox wire types."""
 
 from __future__ import annotations
 

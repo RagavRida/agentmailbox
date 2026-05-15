@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from agentmail import AgentMail
+from agentmailbox import AgentMailbox
 
 
 def _ids() -> tuple[str, str]:
@@ -15,9 +15,9 @@ def _ids() -> tuple[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_round_trip(agentmail_server: str) -> None:
+async def test_round_trip(agentmailbox_server: str) -> None:
     a_id, b_id = _ids()
-    async with AgentMail(a_id, server=agentmail_server) as a:
+    async with AgentMailbox(a_id, server=agentmailbox_server) as a:
         await a.connect()
         sent = await a.send(
             b_id,
@@ -27,7 +27,7 @@ async def test_round_trip(agentmail_server: str) -> None:
         assert isinstance(sent.thread_id, str)
         assert b_id in sent.delivered_to
 
-    async with AgentMail(b_id, server=agentmail_server) as b:
+    async with AgentMailbox(b_id, server=agentmailbox_server) as b:
         await b.connect()
         received = await b.receive()
         assert len(received.messages) == 1
@@ -38,9 +38,9 @@ async def test_round_trip(agentmail_server: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cold_sync_returns_same_snapshot(agentmail_server: str) -> None:
+async def test_cold_sync_returns_same_snapshot(agentmailbox_server: str) -> None:
     a_id, b_id = _ids()
-    async with AgentMail(a_id, server=agentmail_server) as a:
+    async with AgentMailbox(a_id, server=agentmailbox_server) as a:
         await a.connect()
         sent = await a.send(
             b_id,
@@ -50,7 +50,7 @@ async def test_cold_sync_returns_same_snapshot(agentmail_server: str) -> None:
         thread_id = sent.thread_id
 
     # Cold-start a new client for b and rejoin via sync().
-    async with AgentMail(b_id, server=agentmail_server) as cold_b:
+    async with AgentMailbox(b_id, server=agentmailbox_server) as cold_b:
         await cold_b.connect()
         ctx = await cold_b.sync(thread_id)
         assert ctx.snapshot == {"step": "ready", "count": 3}

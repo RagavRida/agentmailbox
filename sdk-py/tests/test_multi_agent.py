@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from agentmail import AgentMail
+from agentmailbox import AgentMailbox
 
 
 def _ids() -> tuple[str, str, str, str]:
@@ -20,10 +20,10 @@ def _ids() -> tuple[str, str, str, str]:
 
 
 @pytest.mark.asyncio
-async def test_cc_visible_bcc_hidden(agentmail_server: str) -> None:
+async def test_cc_visible_bcc_hidden(agentmailbox_server: str) -> None:
     orch, researcher, writer, logger = _ids()
 
-    async with AgentMail(orch, server=agentmail_server) as o:
+    async with AgentMailbox(orch, server=agentmailbox_server) as o:
         await o.connect()
         sent = await o.send(
             researcher,
@@ -35,7 +35,7 @@ async def test_cc_visible_bcc_hidden(agentmail_server: str) -> None:
         thread_id = sent.thread_id
         assert set(sent.delivered_to) == {researcher, writer, logger}
 
-    async with AgentMail(researcher, server=agentmail_server) as r:
+    async with AgentMailbox(researcher, server=agentmailbox_server) as r:
         await r.connect()
         unread = await r.unread()
         assert len(unread) == 1
@@ -52,7 +52,7 @@ async def test_cc_visible_bcc_hidden(agentmail_server: str) -> None:
         # reply_all goes to visible participants minus sender
         assert set(reply.delivered_to) == {orch, writer}
 
-    async with AgentMail(logger, server=agentmail_server) as l:
+    async with AgentMailbox(logger, server=agentmailbox_server) as l:
         await l.connect()
         unread = await l.unread()
         assert len(unread) == 1
@@ -61,10 +61,10 @@ async def test_cc_visible_bcc_hidden(agentmail_server: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_participants_filtering(agentmail_server: str) -> None:
+async def test_participants_filtering(agentmailbox_server: str) -> None:
     orch, researcher, writer, logger = _ids()
 
-    async with AgentMail(orch, server=agentmail_server) as o:
+    async with AgentMailbox(orch, server=agentmailbox_server) as o:
         await o.connect()
         sent = await o.send(
             researcher,
@@ -79,13 +79,13 @@ async def test_participants_filtering(agentmail_server: str) -> None:
         ids = {p.agent_id for p in roles}
         assert logger in ids
 
-    async with AgentMail(writer, server=agentmail_server) as w:
+    async with AgentMailbox(writer, server=agentmailbox_server) as w:
         await w.connect()
         roles = await w.participants(thread_id)
         ids = {p.agent_id for p in roles}
         assert logger not in ids
 
-    async with AgentMail(logger, server=agentmail_server) as l:
+    async with AgentMailbox(logger, server=agentmailbox_server) as l:
         await l.connect()
         roles = await l.participants(thread_id)
         ids = {p.agent_id for p in roles}

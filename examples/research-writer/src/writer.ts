@@ -8,10 +8,10 @@
  * already participates in, so it picks up cold from researcher's last
  * snapshot — no local state required.
  */
-import { AgentMail } from "agentmail";
+import { AgentMailbox } from "agentmailbox";
 import { complete } from "./llm";
 
-const SERVER = process.env.AGENTMAIL_SERVER ?? "http://localhost:3000";
+const SERVER = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
 const ME = "writer@demo";
 const RESEARCHER = "researcher@demo";
 const POLL_MS = 1500;
@@ -23,7 +23,7 @@ interface FindingsPayload {
 }
 
 async function handleFindings(
-  agent: AgentMail,
+  agent: AgentMailbox,
   threadId: string,
   payload: FindingsPayload
 ): Promise<void> {
@@ -60,7 +60,7 @@ async function handleFindings(
   );
 }
 
-async function coldResumeAllThreads(agent: AgentMail): Promise<void> {
+async function coldResumeAllThreads(agent: AgentMailbox): Promise<void> {
   // After restart, look at every thread we're in and re-sync. We don't
   // act on past messages we already responded to (markRead handled that)
   // — this just rehydrates context so any pending unread is handled
@@ -75,7 +75,7 @@ async function coldResumeAllThreads(agent: AgentMail): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const agent = new AgentMail({ agentId: ME, server: SERVER });
+  const agent = new AgentMailbox({ agentId: ME, server: SERVER });
   await agent.connect();
   process.stdout.write(`[writer] online at ${SERVER}\n`);
 

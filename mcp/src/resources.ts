@@ -1,7 +1,7 @@
-import type { AgentMail } from "../../dist/agentmail";
+import type { AgentMailbox } from "../../dist/agentmailbox";
 
-export const MAILBOX_URI = "agentmail://mailbox";
-export const THREAD_URI_PREFIX = "agentmail://thread/";
+export const MAILBOX_URI = "agentmailbox://mailbox";
+export const THREAD_URI_PREFIX = "agentmailbox://thread/";
 
 export interface ResourceListing {
   uri: string;
@@ -46,7 +46,7 @@ export interface ResourceContent {
 }
 
 export async function readResource(
-  agent: AgentMail,
+  agent: AgentMailbox,
   uri: string
 ): Promise<ResourceContent> {
   if (uri === MAILBOX_URI) {

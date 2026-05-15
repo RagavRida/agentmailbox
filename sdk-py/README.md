@@ -1,6 +1,6 @@
-# AgentMail — Python SDK
+# AgentMailbox — Python SDK
 
-Python client for [AgentMail](../README.md), the context-sync protocol
+Python client for [AgentMailbox](../README.md), the context-sync protocol
 for AI agents. Mirrors the JS SDK feature-for-feature.
 
 ## Install
@@ -13,11 +13,11 @@ Requires Python 3.10+.
 
 ## Start the server
 
-The Python SDK is a pure HTTP client — it talks to the AgentMail
+The Python SDK is a pure HTTP client — it talks to the AgentMailbox
 Node server. Start it first:
 
 ```bash
-cd ~/agentmail
+cd ~/agentmailbox
 npm start
 ```
 
@@ -25,10 +25,10 @@ npm start
 
 ```python
 import asyncio
-from agentmail import AgentMail
+from agentmailbox import AgentMailbox
 
 async def main():
-    async with AgentMail("researcher@demo", server="http://localhost:3000") as a:
+    async with AgentMailbox("researcher@demo", server="http://localhost:3000") as a:
         await a.connect()
         result = await a.send(
             "writer@demo",
@@ -43,7 +43,7 @@ asyncio.run(main())
 ## Multi-agent (CC/BCC/ReplyAll)
 
 ```python
-async with AgentMail("orchestrator@demo", server=SERVER) as orchestrator:
+async with AgentMailbox("orchestrator@demo", server=SERVER) as orchestrator:
     await orchestrator.connect()
     sent = await orchestrator.send(
         "researcher@demo",
@@ -53,7 +53,7 @@ async with AgentMail("orchestrator@demo", server=SERVER) as orchestrator:
         context_snapshot={"step": "task_dispatched", "priority": "high"},
     )
 
-async with AgentMail("researcher@demo", server=SERVER) as researcher:
+async with AgentMailbox("researcher@demo", server=SERVER) as researcher:
     await researcher.connect()
     inbound = await researcher.receive()
     # inbound.context.snapshot → {"step": "task_dispatched", "priority": "high"}
@@ -79,15 +79,15 @@ python examples/multi_agent.py
 For scripts and notebooks that aren't async-friendly:
 
 ```python
-from agentmail import AgentMailSync
+from agentmailbox import AgentMailboxSync
 
-agent = AgentMailSync("researcher@demo")
+agent = AgentMailboxSync("researcher@demo")
 agent.connect()
 result = agent.send("writer@demo", {"task": "..."})
 print(result.thread_id)
 ```
 
-`AgentMailSync` drives a fresh event loop per call via `asyncio.run`.
+`AgentMailboxSync` drives a fresh event loop per call via `asyncio.run`.
 It's convenient but slower than the async client.
 
 ## API
@@ -110,7 +110,7 @@ No untyped dicts in the public surface.
 
 ## Exceptions
 
-- `AgentMailError` — base class. `.status_code` set when raised from HTTP.
+- `AgentMailboxError` — base class. `.status_code` set when raised from HTTP.
 - `NotFoundError` — 404
 - `ServerError` — 5xx
 - `ConnectionError` — server unreachable

@@ -1,6 +1,6 @@
-"""Pytest fixtures for AgentMail Python SDK tests.
+"""Pytest fixtures for AgentMailbox Python SDK tests.
 
-The fixtures spawn the Node.js AgentMail server as a subprocess so the
+The fixtures spawn the Node.js AgentMailbox server as a subprocess so the
 SDK can hit a real HTTP endpoint. Each fixture isolates the database
 to a tmpfile and kills the process group on teardown.
 """
@@ -45,7 +45,7 @@ def _wait_for_health(url: str, timeout: float) -> None:
             last_err = exc
         time.sleep(0.1)
     raise RuntimeError(
-        f"AgentMail server at {url} did not become healthy "
+        f"AgentMailbox server at {url} did not become healthy "
         f"within {timeout}s (last error: {last_err})"
     )
 
@@ -59,12 +59,12 @@ class _Server:
 
 def _spawn_server(env_extra: Optional[dict[str, str]] = None) -> _Server:
     port = _free_port()
-    db_handle, db_path = tempfile.mkstemp(prefix="agentmail-pytest-", suffix=".db")
+    db_handle, db_path = tempfile.mkstemp(prefix="agentmailbox-pytest-", suffix=".db")
     os.close(db_handle)
 
     env = os.environ.copy()
     env["PORT"] = str(port)
-    env["AGENTMAIL_DB"] = db_path
+    env["AGENTMAILBOX_DB"] = db_path
     if env_extra:
         env.update(env_extra)
 
@@ -109,8 +109,8 @@ def _terminate(proc: subprocess.Popen[bytes]) -> None:
 
 
 @pytest.fixture(scope="session")
-def agentmail_server() -> Iterator[str]:
-    """Boot a Node AgentMail server with no auth. Session-scoped."""
+def agentmailbox_server() -> Iterator[str]:
+    """Boot a Node AgentMailbox server with no auth. Session-scoped."""
     server = _spawn_server()
     try:
         yield server.url
@@ -123,13 +123,13 @@ def agentmail_server() -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
-def agentmail_server_with_auth() -> Iterator[tuple[str, str]]:
-    """Boot a second AgentMail server with AGENTMAIL_API_KEY set.
+def agentmailbox_server_with_auth() -> Iterator[tuple[str, str]]:
+    """Boot a second AgentMailbox server with AGENTMAILBOX_API_KEY set.
 
     Yields (url, api_key).
     """
     api_key = "pytest-secret-XYZ"
-    server = _spawn_server({"AGENTMAIL_API_KEY": api_key})
+    server = _spawn_server({"AGENTMAILBOX_API_KEY": api_key})
     try:
         yield server.url, api_key
     finally:

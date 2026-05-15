@@ -8,7 +8,7 @@ import {
   Thread,
 } from "./types";
 
-export interface AgentMailConfig {
+export interface AgentMailboxConfig {
   agentId: AgentAddress;
   server?: string;
   apiKey?: string;
@@ -20,12 +20,12 @@ export interface SendResult {
   deliveredTo: AgentAddress[];
 }
 
-export class AgentMail {
+export class AgentMailbox {
   private agentId: AgentAddress;
   private server: string;
   private apiKey?: string;
 
-  constructor(config: AgentMailConfig) {
+  constructor(config: AgentMailboxConfig) {
     if (!config.agentId) throw new Error("agentId is required");
     this.agentId = config.agentId;
     this.server = (config.server ?? "http://localhost:3000").replace(/\/$/, "");
@@ -50,7 +50,7 @@ export class AgentMail {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`AgentMail ${method} ${path} failed: ${res.status} ${text}`);
+      throw new Error(`AgentMailbox ${method} ${path} failed: ${res.status} ${text}`);
     }
     return (await res.json()) as T;
   }

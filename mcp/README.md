@@ -1,37 +1,37 @@
-# AgentMail MCP
+# AgentMailbox MCP
 
-Exposes AgentMail to any MCP-aware client. Each MCP server instance
+Exposes AgentMailbox to any MCP-aware client. Each MCP server instance
 represents one agent identity.
 
 ## Install
 
 ```bash
-cd ~/agentmail/mcp && npm install && npm run build
+cd ~/agentmailbox/mcp && npm install && npm run build
 ```
 
-This builds the parent AgentMail SDK first (if not already built), then
+This builds the parent AgentMailbox SDK first (if not already built), then
 the MCP adapter. `dist/index.js` is the executable entry.
 
 ## Configuration
 
 Required:
 
-- `AGENTMAIL_AGENT_ID` — the agent identity this MCP server represents
+- `AGENTMAILBOX_AGENT_ID` — the agent identity this MCP server represents
   (e.g. `claude@local`).
 
 Optional:
 
-- `AGENTMAIL_SERVER` — HTTP server URL, defaults to `http://localhost:3000`.
-- `AGENTMAIL_API_KEY` — passed through as a Bearer token.
+- `AGENTMAILBOX_SERVER` — HTTP server URL, defaults to `http://localhost:3000`.
+- `AGENTMAILBOX_API_KEY` — passed through as a Bearer token.
 
 CLI flags mirror env vars and take precedence:
 
 ```bash
-agentmail-mcp --agent-id claude@local --server http://localhost:3000
+agentmailbox-mcp --agent-id claude@local --server http://localhost:3000
 ```
 
-Make sure the AgentMail HTTP server is running first (`npm start` in
-`~/agentmail`).
+Make sure the AgentMailbox HTTP server is running first (`npm start` in
+`~/agentmailbox`).
 
 ## Claude Desktop config
 
@@ -40,12 +40,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "agentmail": {
+    "agentmailbox": {
       "command": "node",
-      "args": ["/Users/you/agentmail/mcp/dist/index.js"],
+      "args": ["/Users/you/agentmailbox/mcp/dist/index.js"],
       "env": {
-        "AGENTMAIL_AGENT_ID": "claude@local",
-        "AGENTMAIL_SERVER": "http://localhost:3000"
+        "AGENTMAILBOX_AGENT_ID": "claude@local",
+        "AGENTMAILBOX_SERVER": "http://localhost:3000"
       }
     }
   }
@@ -55,25 +55,25 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ## Cursor / Continue / other MCP clients
 
 Same shape — point them at `node /path/to/mcp/dist/index.js` with
-`AGENTMAIL_AGENT_ID` set.
+`AGENTMAILBOX_AGENT_ID` set.
 
 ## Available tools
 
 | Tool                    | Description                                                            |
 | ----------------------- | ---------------------------------------------------------------------- |
-| `agentmail_send`        | Send a message to another agent; auto-creates a thread if needed.      |
-| `agentmail_receive`     | Get unread messages with full thread context attached.                 |
-| `agentmail_unread`      | List unread context frames without consuming them.                     |
-| `agentmail_sync`        | Rejoin a thread with full assembled context.                           |
-| `agentmail_threads`     | List all threads this agent is part of.                                |
-| `agentmail_mark_read`   | Mark a thread as read for this agent.                                  |
-| `agentmail_reply_all`   | Reply to every visible participant on a thread.                        |
-| `agentmail_participants`| List visible participants on a thread with their roles (to/cc/bcc).    |
+| `agentmailbox_send`        | Send a message to another agent; auto-creates a thread if needed.      |
+| `agentmailbox_receive`     | Get unread messages with full thread context attached.                 |
+| `agentmailbox_unread`      | List unread context frames without consuming them.                     |
+| `agentmailbox_sync`        | Rejoin a thread with full assembled context.                           |
+| `agentmailbox_threads`     | List all threads this agent is part of.                                |
+| `agentmailbox_mark_read`   | Mark a thread as read for this agent.                                  |
+| `agentmailbox_reply_all`   | Reply to every visible participant on a thread.                        |
+| `agentmailbox_participants`| List visible participants on a thread with their roles (to/cc/bcc).    |
 
 Two read-only MCP resources are also exposed:
 
-- `agentmail://mailbox` — JSON listing of all threads.
-- `agentmail://thread/{threadId}` — JSON with thread context and participants.
+- `agentmailbox://mailbox` — JSON listing of all threads.
+- `agentmailbox://thread/{threadId}` — JSON with thread context and participants.
 
 ## Why MCP
 

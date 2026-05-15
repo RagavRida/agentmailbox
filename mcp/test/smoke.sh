@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Smoke test for agentmail-mcp.
+# Smoke test for agentmailbox-mcp.
 #
-# 1. Boots the AgentMail HTTP server on a private port + db.
+# 1. Boots the AgentMailbox HTTP server on a private port + db.
 # 2. Registers a peer agent so there is someone to talk to.
 # 3. Drives the MCP server over stdio with JSON-RPC: initialize,
 #    tools/list, resources/list, resources/templates/list, and
-#    tools/call(agentmail_send).
+#    tools/call(agentmailbox_send).
 # 4. Verifies the message landed in the peer's mailbox via HTTP.
 #
 # Exits 0 on success, non-zero on failure.
@@ -13,11 +13,11 @@
 set -euo pipefail
 
 PORT=3300
-DB="$(mktemp -t agentmail-mcp-smoke.XXXXXX.db)"
+DB="$(mktemp -t agentmailbox-mcp-smoke.XXXXXX.db)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PARENT="$(cd "$ROOT/.." && pwd)"
-SERVER_LOG="$(mktemp -t agentmail-mcp-server.XXXXXX.log)"
-MCP_OUT="$(mktemp -t agentmail-mcp-out.XXXXXX.json)"
+SERVER_LOG="$(mktemp -t agentmailbox-mcp-server.XXXXXX.log)"
+MCP_OUT="$(mktemp -t agentmailbox-mcp-out.XXXXXX.json)"
 
 cleanup() {
   if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -32,10 +32,10 @@ echo "[smoke] building parent + mcp"
 (cd "$PARENT" && npm install --no-audit --no-fund --silent >/dev/null && npm run build --silent >/dev/null)
 (cd "$ROOT" && npm install --no-audit --no-fund --silent >/dev/null && npm run build --silent >/dev/null)
 
-echo "[smoke] starting AgentMail server on :$PORT"
+echo "[smoke] starting AgentMailbox server on :$PORT"
 (
   cd "$PARENT"
-  PORT="$PORT" AGENTMAIL_DB="$DB" node dist/server.js
+  PORT="$PORT" AGENTMAILBOX_DB="$DB" node dist/server.js
 ) >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
@@ -67,12 +67,12 @@ REQUESTS=$(cat <<'JSON'
 {"jsonrpc":"2.0","id":2,"method":"tools/list"}
 {"jsonrpc":"2.0","id":3,"method":"resources/list"}
 {"jsonrpc":"2.0","id":4,"method":"resources/templates/list"}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"agentmail_send","arguments":{"to":"other@demo","payload":{"text":"hello from mcp smoke"}}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"agentmailbox_send","arguments":{"to":"other@demo","payload":{"text":"hello from mcp smoke"}}}}
 JSON
 )
 
-AGENTMAIL_AGENT_ID="claude@smoke" \
-AGENTMAIL_SERVER="http://localhost:$PORT" \
+AGENTMAILBOX_AGENT_ID="claude@smoke" \
+AGENTMAILBOX_SERVER="http://localhost:$PORT" \
   node "$ROOT/dist/index.js" <<<"$REQUESTS" >"$MCP_OUT" 2>"$SERVER_LOG.mcp" || {
     echo "[smoke] FAIL: mcp exited non-zero"
     cat "$SERVER_LOG.mcp" >&2 || true
@@ -112,7 +112,7 @@ need(5, (r) => {
   return typeof payload.messageId === "string"
       && typeof payload.threadId === "string"
       && Array.isArray(payload.deliveredTo);
-}, "tools/call(agentmail_send)");
+}, "tools/call(agentmailbox_send)");
 console.log("[smoke] MCP responses OK");
 NODE
 

@@ -1,11 +1,11 @@
 {
-  "name": "agentmail",
+  "name": "agentmailbox",
   "version": "0.1.0",
   "description": "Context-sync protocol for AI agents. Every agent has a mailbox.",
-  "main": "dist/agentmail.js",
-  "types": "dist/agentmail.d.ts",
+  "main": "dist/agentmailbox.js",
+  "types": "dist/agentmailbox.d.ts",
   "bin": {
-    "agentmail-server": "dist/server.js"
+    "agentmailbox-server": "dist/server.js"
   },
   "files": [
     "dist/",
@@ -32,11 +32,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/RagavRida/agentmail.git"
+    "url": "https://github.com/RagavRida/agentmailbox.git"
   },
-  "homepage": "https://github.com/RagavRida/agentmail",
+  "homepage": "https://github.com/RagavRida/agentmailbox",
   "bugs": {
-    "url": "https://github.com/RagavRida/agentmail/issues"
+    "url": "https://github.com/RagavRida/agentmailbox/issues"
   },
   "license": "MIT",
   "engines": {

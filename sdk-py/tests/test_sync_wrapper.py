@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from agentmail import AgentMailSync
+from agentmailbox import AgentMailboxSync
 
 
 def _ids() -> tuple[str, str]:
@@ -12,9 +12,9 @@ def _ids() -> tuple[str, str]:
     return f"syncA-{s}@demo", f"syncB-{s}@demo"
 
 
-def test_sync_round_trip(agentmail_server: str) -> None:
+def test_sync_round_trip(agentmailbox_server: str) -> None:
     a_id, b_id = _ids()
-    a = AgentMailSync(a_id, server=agentmail_server)
+    a = AgentMailboxSync(a_id, server=agentmailbox_server)
     a.connect()
     sent = a.send(
         b_id,
@@ -23,7 +23,7 @@ def test_sync_round_trip(agentmail_server: str) -> None:
     )
     assert b_id in sent.delivered_to
 
-    b = AgentMailSync(b_id, server=agentmail_server)
+    b = AgentMailboxSync(b_id, server=agentmailbox_server)
     b.connect()
     received = b.receive()
     assert len(received.messages) == 1
