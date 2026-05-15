@@ -5,6 +5,7 @@ import {
   Message,
   ParticipantRole,
   Thread,
+  ThreadSummary,
 } from "../types";
 
 /**
@@ -98,4 +99,19 @@ export interface Storage {
 
   /** Unread messages where the agent is TO, CC, or BCC (and not the sender). */
   getUnread(agentId: AgentAddress): Promise<Message[]>;
+
+  // ---------- Compression cache ----------
+
+  /**
+   * Latest stored summary for a thread, or `null` when no compressor has
+   * ever run on it. Callers compare `coversMessageIds` against the current
+   * message list to decide whether the cache is stale.
+   */
+  getSummary(threadId: string): Promise<ThreadSummary | null>;
+
+  /**
+   * Persist (or overwrite) the latest summary for a thread. Idempotent —
+   * always replaces the previous row for the same thread.
+   */
+  saveSummary(threadId: string, summary: ThreadSummary): Promise<void>;
 }

@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.3.0 — 2026-05-16
+
+### Added
+
+- **LLM-based context compression.** New `Compressor` interface plus two
+  implementations:
+  - `NoopCompressor` (default) — empty summary, no LLM dependency,
+    keeps zero-config installs working.
+  - `ClaudeCompressor` — folds older messages into a structured summary
+    (`{ text, decisions, openQuestions, artifacts }`) via Claude Haiku.
+    `@anthropic-ai/sdk` is an optional peer dep — install it only if
+    you use this compressor.
+- `Storage` interface gains `getSummary` / `saveSummary`; SQLite adds a
+  `thread_summaries` table (idempotent migration on `init()`).
+- `assembleContext` is now async and accepts
+  `{ threadId, storage, compressor, compressionThreshold }`. Older
+  messages beyond the verbatim window are folded into a cached
+  `ThreadSummary`. Default trigger: ≥20 uncovered older messages.
+- `createServer({ compressor, compressionThreshold })` wires the
+  compressor into the unread / sync routes.
+- `ThreadContext` gains an optional `threadSummaryStructured` field for
+  programmatic access; existing `threadSummary` string still populated
+  from the structured summary's prose `text` (non-breaking).
+
+### Removed (breaking)
+
+- `AgentMailboxStorage` deprecated alias (announced in 0.2.0). Use
+  `SqliteStorage` or `createStorage()` instead.
+
+### Migration
+
+If you were still importing the alias:
+
+```diff
+-import { AgentMailboxStorage } from "agentsmcp";
++import { SqliteStorage } from "agentsmcp";
+-const storage = new AgentMailboxStorage("./db.sqlite");
++const storage = new SqliteStorage("./db.sqlite");
+```
+
+To opt into Claude-backed compression:
+
+```ts
+import { createServer, ClaudeCompressor } from "agentsmcp";
+const { app, ready } = createServer("./db.sqlite", {
+  compressor: new ClaudeCompressor(),     // reads ANTHROPIC_API_KEY
+  compressionThreshold: 20,
+});
+```
+
 ## 0.2.1 — 2026-05-16
 
 ### Fixed

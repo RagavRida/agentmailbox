@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { createStorage, Storage } from "./storage";
+import { Compressor, NoopCompressor } from "./compression";
 import { assembleContext } from "./context";
 import {
   AgentAddress,
@@ -85,6 +86,17 @@ function bearerMatches(provided: string, expected: string): boolean {
 
 export interface CreateServerOptions {
   apiKey?: string;
+  /**
+   * Compressor used to fold older messages into a structured summary.
+   * Defaults to {@link NoopCompressor} — keeps zero-config installs
+   * working without any LLM dependency.
+   */
+  compressor?: Compressor;
+  /**
+   * Compress only once this many older (beyond the verbatim window)
+   * messages have accumulated since the last summary. Defaults to 20.
+   */
+  compressionThreshold?: number;
 }
 
 export interface CreateServerResult {
@@ -101,6 +113,8 @@ export function createServer(
   const ready = storage.init();
 
   const apiKey = opts.apiKey ?? process.env.AGENTMAILBOX_API_KEY ?? "";
+  const compressor = opts.compressor ?? new NoopCompressor();
+  const compressionThreshold = opts.compressionThreshold;
 
   const app = express();
   app.use(express.json({ limit: "10mb" }));
@@ -273,7 +287,12 @@ export function createServer(
       const frames: ContextFrame[] = await Promise.all(
         unread.map(async (m) => {
           const allMessages = await storage.getMessages(m.threadId);
-          const context = assembleContext(allMessages);
+          const context = await assembleContext(allMessages, {
+            threadId: m.threadId,
+            storage,
+            compressor,
+            compressionThreshold,
+          });
           const frame: ContextFrame = {
             id: m.id,
             threadId: m.threadId,
@@ -328,7 +347,12 @@ export function createServer(
       const thread = await storage.getThread(req.params.threadId);
       if (!thread) return res.status(404).json({ error: "thread not found" });
       const requester = (req.query.as as string | undefined) ?? "";
-      const ctx = assembleContext(thread.messages);
+      const ctx = await assembleContext(thread.messages, {
+        threadId: thread.id,
+        storage,
+        compressor,
+        compressionThreshold,
+      });
       return res.status(200).json({
         context: {
           snapshot: ctx.snapshot,

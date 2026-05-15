@@ -7,6 +7,7 @@ import {
   Message,
   ParticipantRole,
   Thread,
+  ThreadSummary,
 } from "../types";
 import { Storage } from "./interface";
 
@@ -78,6 +79,13 @@ export class SqliteStorage implements Storage {
         unread_count INTEGER NOT NULL DEFAULT 0,
         last_synced_at INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(agent_id, thread_id),
+        FOREIGN KEY(thread_id) REFERENCES threads(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS thread_summaries (
+        thread_id TEXT PRIMARY KEY,
+        summary_json TEXT NOT NULL,
+        generated_at INTEGER NOT NULL,
         FOREIGN KEY(thread_id) REFERENCES threads(id)
       );
     `);
@@ -405,6 +413,34 @@ export class SqliteStorage implements Storage {
       )
       .all(agentId, agentId, agentId, agentId, agentId) as MessageRow[];
     return rows.map((r) => this.rowToMessage(r));
+  }
+
+  // ---------- Compression cache ----------
+
+  async getSummary(threadId: string): Promise<ThreadSummary | null> {
+    const row = this.db
+      .prepare(
+        "SELECT summary_json FROM thread_summaries WHERE thread_id = ?"
+      )
+      .get(threadId) as { summary_json: string } | undefined;
+    if (!row) return null;
+    try {
+      return JSON.parse(row.summary_json) as ThreadSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveSummary(threadId: string, summary: ThreadSummary): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO thread_summaries (thread_id, summary_json, generated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(thread_id) DO UPDATE SET
+           summary_json = excluded.summary_json,
+           generated_at = excluded.generated_at`
+      )
+      .run(threadId, JSON.stringify(summary), summary.generatedAt);
   }
 
   async close(): Promise<void> {
