@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+sdk-py/.venv/
+sdk-py/**/__pycache__/
+sdk-py/*.egg-info/
+sdk-py/build/
+sdk-py/dist/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local databases / WAL
+*.db
+*.db-wal
+*.db-shm
+
+# Env
+.env
+.env.local
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
