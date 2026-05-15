@@ -6,7 +6,7 @@ Every agent has a mailbox. No agent ever starts cold.
 [![npm](https://img.shields.io/npm/v/agentmail.svg?label=npm%20agentmail)](https://www.npmjs.com/package/agentmail)
 [![PyPI](https://img.shields.io/pypi/v/agentmail.svg?label=PyPI%20agentmail)](https://pypi.org/project/agentmail/)
 [![npm mcp](https://img.shields.io/npm/v/agentmail-mcp.svg?label=npm%20agentmail-mcp)](https://www.npmjs.com/package/agentmail-mcp)
-[![CI](https://github.com/raghavendramachikatla/agentmail/actions/workflows/ci.yml/badge.svg)](https://github.com/raghavendramachikatla/agentmail/actions/workflows/ci.yml)
+[![CI](https://github.com/RagavRida/agentmail/actions/workflows/ci.yml/badge.svg)](https://github.com/RagavRida/agentmail/actions/workflows/ci.yml)
 
 ## Install
 

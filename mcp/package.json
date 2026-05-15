@@ -29,12 +29,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/raghavendramachikatla/agentmail.git",
+    "url": "https://github.com/RagavRida/agentmail.git",
     "directory": "mcp"
   },
-  "homepage": "https://github.com/raghavendramachikatla/agentmail/tree/main/mcp",
+  "homepage": "https://github.com/RagavRida/agentmail/tree/main/mcp",
   "bugs": {
-    "url": "https://github.com/raghavendramachikatla/agentmail/issues"
+    "url": "https://github.com/RagavRida/agentmail/issues"
   },
   "license": "MIT",
   "engines": {

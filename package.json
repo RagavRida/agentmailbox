@@ -32,11 +32,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/raghavendramachikatla/agentmail.git"
+    "url": "https://github.com/RagavRida/agentmail.git"
   },
-  "homepage": "https://github.com/raghavendramachikatla/agentmail",
+  "homepage": "https://github.com/RagavRida/agentmail",
   "bugs": {
-    "url": "https://github.com/raghavendramachikatla/agentmail/issues"
+    "url": "https://github.com/RagavRida/agentmail/issues"
   },
   "license": "MIT",
   "engines": {
