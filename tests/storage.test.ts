@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v4 as uuidv4 } from "uuid";
 import { rmSync } from "node:fs";
 
-import { AgentMailboxStorage } from "../src/storage";
+import { SqliteStorage } from "../src/storage";
 import { Message } from "../src/types";
 import { freshDb } from "./setup";
 
-let storage: AgentMailboxStorage;
+let storage: SqliteStorage;
 let dbDir: string;
 
 function makeMessage(
@@ -29,56 +29,66 @@ function makeMessage(
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   const db = freshDb();
   dbDir = db.dir;
-  storage = new AgentMailboxStorage(db.path);
-  storage.init();
+  storage = new SqliteStorage(db.path);
+  await storage.init();
 });
 
-afterEach(() => {
-  storage.close();
+afterEach(async () => {
+  await storage.close();
   rmSync(dbDir, { recursive: true, force: true });
 });
 
-describe("AgentMailboxStorage", () => {
-  it("registerAgent is idempotent", () => {
-    const a = storage.registerAgent("alice@demo");
-    const b = storage.registerAgent("alice@demo");
+describe("SqliteStorage", () => {
+  it("registerAgent is idempotent", async () => {
+    const a = await storage.registerAgent("alice@demo");
+    const b = await storage.registerAgent("alice@demo");
     expect(a.id).toBe("alice@demo");
     expect(b.id).toBe("alice@demo");
     expect(b.createdAt).toBe(a.createdAt);
   });
 
-  it("createThread + getThreadByParticipantSet round-trip", () => {
-    const t = storage.createThread(["a@x", "b@x"]);
-    const found = storage.getThreadByParticipantSet(["b@x", "a@x"]);
+  it("init() is safe to call multiple times", async () => {
+    await storage.init();
+    await storage.init();
+    const a = await storage.registerAgent("alice@demo");
+    expect(a.id).toBe("alice@demo");
+  });
+
+  it("createThread + getThreadByParticipantSet round-trip", async () => {
+    const t = await storage.createThread(["a@x", "b@x"]);
+    const found = await storage.getThreadByParticipantSet(["b@x", "a@x"]);
     expect(found?.id).toBe(t.id);
   });
 
-  it("appendMessage fans out unread to TO + CC + BCC, not sender", () => {
-    storage.registerAgent("from@x");
-    storage.registerAgent("to@x");
-    storage.registerAgent("cc@x");
-    storage.registerAgent("bcc@x");
+  it("appendMessage fans out unread to TO + CC + BCC, not sender", async () => {
+    await storage.registerAgent("from@x");
+    await storage.registerAgent("to@x");
+    await storage.registerAgent("cc@x");
+    await storage.registerAgent("bcc@x");
 
-    const thread = storage.createThread(["from@x", "to@x", "cc@x"], ["bcc@x"]);
+    const thread = await storage.createThread(
+      ["from@x", "to@x", "cc@x"],
+      ["bcc@x"]
+    );
     const msg = makeMessage(thread.id, "from@x", "to@x", {
       cc: ["cc@x"],
       bcc: ["bcc@x"],
     });
-    storage.appendMessage(thread.id, msg);
+    await storage.appendMessage(thread.id, msg);
 
-    expect(storage.getMailbox("from@x").unreadCount).toBe(0);
-    expect(storage.getMailbox("to@x").unreadCount).toBe(1);
-    expect(storage.getMailbox("cc@x").unreadCount).toBe(1);
-    expect(storage.getMailbox("bcc@x").unreadCount).toBe(1);
+    expect((await storage.getMailbox("from@x")).unreadCount).toBe(0);
+    expect((await storage.getMailbox("to@x")).unreadCount).toBe(1);
+    expect((await storage.getMailbox("cc@x")).unreadCount).toBe(1);
+    expect((await storage.getMailbox("bcc@x")).unreadCount).toBe(1);
   });
 
-  it("thread.participants ∪= cc and silentParticipants ∪= bcc on append", () => {
-    const thread = storage.createThread(["from@x", "to@x"]);
+  it("thread.participants ∪= cc and silentParticipants ∪= bcc on append", async () => {
+    const thread = await storage.createThread(["from@x", "to@x"]);
 
-    storage.appendMessage(
+    await storage.appendMessage(
       thread.id,
       makeMessage(thread.id, "from@x", "to@x", {
         cc: ["cc@x"],
@@ -86,14 +96,17 @@ describe("AgentMailboxStorage", () => {
       })
     );
 
-    const refreshed = storage.getThread(thread.id);
+    const refreshed = await storage.getThread(thread.id);
     expect(refreshed?.participants.sort()).toEqual(["cc@x", "from@x", "to@x"]);
     expect(refreshed?.silentParticipants).toEqual(["bcc@x"]);
   });
 
-  it("getUnread excludes sender, includes cc and bcc recipients", () => {
-    const thread = storage.createThread(["from@x", "to@x", "cc@x"], ["bcc@x"]);
-    storage.appendMessage(
+  it("getUnread excludes sender, includes cc and bcc recipients", async () => {
+    const thread = await storage.createThread(
+      ["from@x", "to@x", "cc@x"],
+      ["bcc@x"]
+    );
+    await storage.appendMessage(
       thread.id,
       makeMessage(thread.id, "from@x", "to@x", {
         cc: ["cc@x"],
@@ -101,35 +114,36 @@ describe("AgentMailboxStorage", () => {
       })
     );
 
-    expect(storage.getUnread("from@x").length).toBe(0);
-    expect(storage.getUnread("to@x").length).toBe(1);
-    expect(storage.getUnread("cc@x").length).toBe(1);
-    expect(storage.getUnread("bcc@x").length).toBe(1);
+    expect((await storage.getUnread("from@x")).length).toBe(0);
+    expect((await storage.getUnread("to@x")).length).toBe(1);
+    expect((await storage.getUnread("cc@x")).length).toBe(1);
+    expect((await storage.getUnread("bcc@x")).length).toBe(1);
   });
 
-  it("markRead clears unread only for that thread", () => {
-    const t1 = storage.createThread(["from@x", "to@x"]);
-    const t2 = storage.createThread(["from@x", "to@x", "spare@x"]);
+  it("markRead clears unread only for that thread", async () => {
+    const t1 = await storage.createThread(["from@x", "to@x"]);
+    const t2 = await storage.createThread(["from@x", "to@x", "spare@x"]);
 
-    storage.appendMessage(
+    await storage.appendMessage(
       t1.id,
       makeMessage(t1.id, "from@x", "to@x", { timestamp: 1 })
     );
-    storage.appendMessage(
+    await storage.appendMessage(
       t2.id,
       makeMessage(t2.id, "from@x", "to@x", { timestamp: 2 })
     );
 
-    expect(storage.getMailbox("to@x").unreadCount).toBe(2);
-    storage.markRead("to@x", t1.id);
-    expect(storage.getUnread("to@x").length).toBe(1);
-    expect(storage.getUnread("to@x")[0].threadId).toBe(t2.id);
+    expect((await storage.getMailbox("to@x")).unreadCount).toBe(2);
+    await storage.markRead("to@x", t1.id);
+    const unread = await storage.getUnread("to@x");
+    expect(unread.length).toBe(1);
+    expect(unread[0].threadId).toBe(t2.id);
   });
 
-  it("getThreadParticipants returns to/cc/bcc roles with to>cc>bcc priority", () => {
-    const thread = storage.createThread(["from@x", "to@x"]);
+  it("getThreadParticipants returns to/cc/bcc roles with to>cc>bcc priority", async () => {
+    const thread = await storage.createThread(["from@x", "to@x"]);
     // First message: alice is cc, bob is bcc
-    storage.appendMessage(
+    await storage.appendMessage(
       thread.id,
       makeMessage(thread.id, "from@x", "to@x", {
         cc: ["alice@x"],
@@ -138,12 +152,12 @@ describe("AgentMailboxStorage", () => {
       })
     );
     // Second message: alice becomes a primary TO — should upgrade to "to"
-    storage.appendMessage(
+    await storage.appendMessage(
       thread.id,
       makeMessage(thread.id, "from@x", "alice@x", { timestamp: 20 })
     );
 
-    const roles = storage.getThreadParticipants(thread.id);
+    const roles = await storage.getThreadParticipants(thread.id);
     const byId = Object.fromEntries(roles.map((r) => [r.agentId, r.role]));
     expect(byId["from@x"]).toBe("to");
     expect(byId["to@x"]).toBe("to");

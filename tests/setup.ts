@@ -22,7 +22,8 @@ export async function startServer(
   opts: CreateServerOptions = {}
 ): Promise<TestServer> {
   const { dir, path } = freshDb();
-  const { app } = createServer(path, opts);
+  const { app, ready } = createServer(path, opts);
+  await ready;
   return await new Promise<TestServer>((resolve) => {
     const server: Server = app.listen(0, "127.0.0.1", () => {
       const addr = server.address() as AddressInfo;

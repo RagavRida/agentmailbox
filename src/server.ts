@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import express, { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { AgentMailboxStorage } from "./storage";
+import { createStorage, Storage } from "./storage";
 import { assembleContext } from "./context";
 import {
   AgentAddress,
@@ -87,12 +87,18 @@ export interface CreateServerOptions {
   apiKey?: string;
 }
 
+export interface CreateServerResult {
+  app: express.Express;
+  storage: Storage;
+  ready: Promise<void>;
+}
+
 export function createServer(
   dbPath = "agentmailbox.db",
   opts: CreateServerOptions = {}
-) {
-  const storage = new AgentMailboxStorage(dbPath);
-  storage.init();
+): CreateServerResult {
+  const storage = createStorage(dbPath);
+  const ready = storage.init();
 
   const apiKey = opts.apiKey ?? process.env.AGENTMAILBOX_API_KEY ?? "";
 
@@ -120,213 +126,253 @@ export function createServer(
   app.use(requireApiKey);
 
   // POST /agents/register
-  app.post("/agents/register", (req: Request, res: Response) => {
-    const parsed = RegisterSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.flatten() });
+  app.post("/agents/register", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = RegisterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+      }
+      const existing = await storage.getAgent(parsed.data.agentId);
+      const agent = await storage.registerAgent(parsed.data.agentId);
+      return res.status(201).json({
+        agentId: agent.id,
+        created: !existing,
+      });
+    } catch (e) {
+      next(e);
     }
-    const existing = storage.getAgent(parsed.data.agentId);
-    const agent = storage.registerAgent(parsed.data.agentId);
-    return res.status(201).json({
-      agentId: agent.id,
-      created: !existing,
-    });
   });
 
   // POST /messages/send
-  app.post("/messages/send", (req: Request, res: Response) => {
-    const parsed = SendSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.flatten() });
-    }
-    const { from, to, payload, contextSnapshot, threadId, cc, bcc, replyTo } =
-      parsed.data;
-
-    storage.registerAgent(from);
-    storage.registerAgent(to);
-    for (const a of cc ?? []) storage.registerAgent(a);
-    for (const a of bcc ?? []) storage.registerAgent(a);
-
-    let thread: Thread | null = null;
-    if (threadId) {
-      thread = storage.getThread(threadId);
-      if (!thread) {
-        return res.status(404).json({ error: `thread ${threadId} not found` });
+  app.post("/messages/send", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = SendSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
       }
-    } else {
-      const visibleSet = [from, to, ...(cc ?? [])];
-      thread = storage.getThreadByParticipantSet(visibleSet);
-      if (!thread) thread = storage.createThread(visibleSet, bcc ?? []);
+      const { from, to, payload, contextSnapshot, threadId, cc, bcc, replyTo } =
+        parsed.data;
+
+      await storage.registerAgent(from);
+      await storage.registerAgent(to);
+      for (const a of cc ?? []) await storage.registerAgent(a);
+      for (const a of bcc ?? []) await storage.registerAgent(a);
+
+      let thread: Thread | null = null;
+      if (threadId) {
+        thread = await storage.getThread(threadId);
+        if (!thread) {
+          return res.status(404).json({ error: `thread ${threadId} not found` });
+        }
+      } else {
+        const visibleSet = [from, to, ...(cc ?? [])];
+        thread = await storage.getThreadByParticipantSet(visibleSet);
+        if (!thread) thread = await storage.createThread(visibleSet, bcc ?? []);
+      }
+
+      const message: Message = {
+        id: uuidv4(),
+        threadId: thread.id,
+        from,
+        to,
+        payload,
+        contextSnapshot: contextSnapshot ?? {},
+        timestamp: Date.now(),
+      };
+      if (cc && cc.length > 0) message.cc = cc;
+      if (bcc && bcc.length > 0) message.bcc = bcc;
+      if (replyTo) message.replyTo = replyTo;
+
+      await storage.appendMessage(thread.id, message);
+
+      const deliveredTo = Array.from(
+        new Set<AgentAddress>([to, ...(cc ?? []), ...(bcc ?? [])])
+      ).filter((a) => a !== from);
+
+      return res.status(200).json({
+        messageId: message.id,
+        threadId: thread.id,
+        deliveredTo,
+      });
+    } catch (e) {
+      next(e);
     }
-
-    const message: Message = {
-      id: uuidv4(),
-      threadId: thread.id,
-      from,
-      to,
-      payload,
-      contextSnapshot: contextSnapshot ?? {},
-      timestamp: Date.now(),
-    };
-    if (cc && cc.length > 0) message.cc = cc;
-    if (bcc && bcc.length > 0) message.bcc = bcc;
-    if (replyTo) message.replyTo = replyTo;
-
-    storage.appendMessage(thread.id, message);
-
-    const deliveredTo = Array.from(
-      new Set<AgentAddress>([to, ...(cc ?? []), ...(bcc ?? [])])
-    ).filter((a) => a !== from);
-
-    return res.status(200).json({
-      messageId: message.id,
-      threadId: thread.id,
-      deliveredTo,
-    });
   });
 
   // POST /messages/reply-all
-  app.post("/messages/reply-all", (req: Request, res: Response) => {
-    const parsed = ReplyAllSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.flatten() });
+  app.post("/messages/reply-all", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = ReplyAllSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+      }
+      const { from, threadId, payload, contextSnapshot } = parsed.data;
+
+      const thread = await storage.getThread(threadId);
+      if (!thread) return res.status(404).json({ error: "thread not found" });
+
+      await storage.registerAgent(from);
+
+      const visible = thread.participants.filter((p) => p !== from);
+      if (visible.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "no other visible participants to reply to" });
+      }
+
+      const [primary, ...rest] = visible;
+      const message: Message = {
+        id: uuidv4(),
+        threadId,
+        from,
+        to: primary,
+        payload,
+        contextSnapshot: contextSnapshot ?? {},
+        timestamp: Date.now(),
+      };
+      if (rest.length > 0) message.cc = rest;
+
+      await storage.appendMessage(threadId, message);
+
+      const deliveredTo = visible;
+      return res.status(200).json({
+        messageId: message.id,
+        threadId,
+        deliveredTo,
+      });
+    } catch (e) {
+      next(e);
     }
-    const { from, threadId, payload, contextSnapshot } = parsed.data;
-
-    const thread = storage.getThread(threadId);
-    if (!thread) return res.status(404).json({ error: "thread not found" });
-
-    storage.registerAgent(from);
-
-    const visible = thread.participants.filter((p) => p !== from);
-    if (visible.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "no other visible participants to reply to" });
-    }
-
-    const [primary, ...rest] = visible;
-    const message: Message = {
-      id: uuidv4(),
-      threadId,
-      from,
-      to: primary,
-      payload,
-      contextSnapshot: contextSnapshot ?? {},
-      timestamp: Date.now(),
-    };
-    if (rest.length > 0) message.cc = rest;
-
-    storage.appendMessage(threadId, message);
-
-    const deliveredTo = visible;
-    return res.status(200).json({
-      messageId: message.id,
-      threadId,
-      deliveredTo,
-    });
   });
 
   // GET /mailbox/:agentId
-  app.get("/mailbox/:agentId", (req: Request, res: Response) => {
-    const agentId = req.params.agentId;
-    const mailbox = storage.getMailbox(agentId);
-    const threads: Thread[] = mailbox.threads
-      .map((tid) => storage.getThread(tid))
-      .filter((t): t is Thread => t !== null)
-      .map((t) => stripBccFromThread(t, agentId));
-    return res.status(200).json({
-      threads,
-      unreadCount: mailbox.unreadCount,
-    });
+  app.get("/mailbox/:agentId", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const mailbox = await storage.getMailbox(agentId);
+      const threadsRaw = await Promise.all(
+        mailbox.threads.map((tid) => storage.getThread(tid))
+      );
+      const threads: Thread[] = threadsRaw
+        .filter((t): t is Thread => t !== null)
+        .map((t) => stripBccFromThread(t, agentId));
+      return res.status(200).json({
+        threads,
+        unreadCount: mailbox.unreadCount,
+      });
+    } catch (e) {
+      next(e);
+    }
   });
 
   // GET /mailbox/:agentId/unread
-  app.get("/mailbox/:agentId/unread", (req: Request, res: Response) => {
-    const agentId = req.params.agentId;
-    const unread = storage.getUnread(agentId);
-    const frames: ContextFrame[] = unread.map((m) => {
-      const allMessages = storage.getMessages(m.threadId);
-      const context = assembleContext(allMessages);
-      const frame: ContextFrame = {
-        id: m.id,
-        threadId: m.threadId,
-        from: m.from,
-        to: m.to,
-        timestamp: m.timestamp,
-        payload: m.payload,
-        context,
-      };
-      if (m.cc) frame.cc = m.cc;
-      if (m.bcc) frame.bcc = m.bcc;
-      if (m.replyTo) frame.replyTo = m.replyTo;
-      return stripBccFromFrame(frame, agentId);
-    });
-    return res.status(200).json({ messages: frames });
+  app.get("/mailbox/:agentId/unread", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const unread = await storage.getUnread(agentId);
+      const frames: ContextFrame[] = await Promise.all(
+        unread.map(async (m) => {
+          const allMessages = await storage.getMessages(m.threadId);
+          const context = assembleContext(allMessages);
+          const frame: ContextFrame = {
+            id: m.id,
+            threadId: m.threadId,
+            from: m.from,
+            to: m.to,
+            timestamp: m.timestamp,
+            payload: m.payload,
+            context,
+          };
+          if (m.cc) frame.cc = m.cc;
+          if (m.bcc) frame.bcc = m.bcc;
+          if (m.replyTo) frame.replyTo = m.replyTo;
+          return stripBccFromFrame(frame, agentId);
+        })
+      );
+      return res.status(200).json({ messages: frames });
+    } catch (e) {
+      next(e);
+    }
   });
 
   // POST /mailbox/:agentId/read
-  app.post("/mailbox/:agentId/read", (req: Request, res: Response) => {
-    const agentId = req.params.agentId;
-    const parsed = MarkReadSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.flatten() });
+  app.post("/mailbox/:agentId/read", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const parsed = MarkReadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+      }
+      await storage.markRead(agentId, parsed.data.threadId);
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      next(e);
     }
-    storage.markRead(agentId, parsed.data.threadId);
-    return res.status(200).json({ ok: true });
   });
 
   // GET /threads/:threadId
-  app.get("/threads/:threadId", (req: Request, res: Response) => {
-    const thread = storage.getThread(req.params.threadId);
-    if (!thread) return res.status(404).json({ error: "thread not found" });
-    const requester = (req.query.as as string | undefined) ?? "";
-    return res.status(200).json({ thread: stripBccFromThread(thread, requester) });
+  app.get("/threads/:threadId", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const thread = await storage.getThread(req.params.threadId);
+      if (!thread) return res.status(404).json({ error: "thread not found" });
+      const requester = (req.query.as as string | undefined) ?? "";
+      return res.status(200).json({ thread: stripBccFromThread(thread, requester) });
+    } catch (e) {
+      next(e);
+    }
   });
 
   // GET /threads/:threadId/sync
-  app.get("/threads/:threadId/sync", (req: Request, res: Response) => {
-    const thread = storage.getThread(req.params.threadId);
-    if (!thread) return res.status(404).json({ error: "thread not found" });
-    const requester = (req.query.as as string | undefined) ?? "";
-    const ctx = assembleContext(thread.messages);
-    return res.status(200).json({
-      context: {
-        snapshot: ctx.snapshot,
-        threadSummary: ctx.threadSummary,
-        recentMessages: stripBccFromMessages(ctx.recentMessages, requester),
-      },
-    });
+  app.get("/threads/:threadId/sync", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const thread = await storage.getThread(req.params.threadId);
+      if (!thread) return res.status(404).json({ error: "thread not found" });
+      const requester = (req.query.as as string | undefined) ?? "";
+      const ctx = assembleContext(thread.messages);
+      return res.status(200).json({
+        context: {
+          snapshot: ctx.snapshot,
+          threadSummary: ctx.threadSummary,
+          recentMessages: stripBccFromMessages(ctx.recentMessages, requester),
+        },
+      });
+    } catch (e) {
+      next(e);
+    }
   });
 
   // GET /threads/:threadId/participants
-  app.get("/threads/:threadId/participants", (req: Request, res: Response) => {
-    const threadId = req.params.threadId;
-    const thread = storage.getThread(threadId);
-    if (!thread) return res.status(404).json({ error: "thread not found" });
+  app.get("/threads/:threadId/participants", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const threadId = req.params.threadId;
+      const thread = await storage.getThread(threadId);
+      if (!thread) return res.status(404).json({ error: "thread not found" });
 
-    const requester = (req.query.as as string | undefined) ?? "";
-    const roles = storage.getThreadParticipants(threadId);
+      const requester = (req.query.as as string | undefined) ?? "";
+      const roles = await storage.getThreadParticipants(threadId);
 
-    // Determine which BCC agents the requester can see.
-    // Rule: requester sees a BCC participant iff requester is the sender of
-    // any message that included that agent in BCC, OR requester IS that BCC agent.
-    const messages = thread.messages;
-    const bccVisibleToRequester = new Set<string>();
-    for (const m of messages) {
-      if (!m.bcc) continue;
-      if (m.from === requester) {
-        for (const a of m.bcc) bccVisibleToRequester.add(a);
+      // Determine which BCC agents the requester can see.
+      // Rule: requester sees a BCC participant iff requester is the sender of
+      // any message that included that agent in BCC, OR requester IS that BCC agent.
+      const messages = thread.messages;
+      const bccVisibleToRequester = new Set<string>();
+      for (const m of messages) {
+        if (!m.bcc) continue;
+        if (m.from === requester) {
+          for (const a of m.bcc) bccVisibleToRequester.add(a);
+        }
       }
+      if (requester) bccVisibleToRequester.add(requester);
+
+      const filtered: ParticipantRole[] = roles.filter((p) => {
+        if (p.role !== "bcc") return true;
+        return bccVisibleToRequester.has(p.agentId);
+      });
+
+      return res.status(200).json({ participants: filtered });
+    } catch (e) {
+      next(e);
     }
-    if (requester) bccVisibleToRequester.add(requester);
-
-    const filtered: ParticipantRole[] = roles.filter((p) => {
-      if (p.role !== "bcc") return true;
-      return bccVisibleToRequester.has(p.agentId);
-    });
-
-    return res.status(200).json({ participants: filtered });
   });
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -334,15 +380,22 @@ export function createServer(
     res.status(500).json({ error: err.message ?? "internal error" });
   });
 
-  return { app, storage };
+  return { app, storage, ready };
 }
 
 if (require.main === module) {
   const port = Number(process.env.PORT ?? 3000);
   const dbPath = process.env.AGENTMAILBOX_DB ?? "agentmailbox.db";
-  const { app } = createServer(dbPath);
-  app.listen(port, () => {
-    console.log(`[agentmailbox] server listening on http://localhost:${port}`);
-    console.log(`[agentmailbox] db: ${dbPath}`);
-  });
+  const { app, ready } = createServer(dbPath);
+  ready
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`[agentmailbox] server listening on http://localhost:${port}`);
+        console.log(`[agentmailbox] db: ${dbPath}`);
+      });
+    })
+    .catch((e) => {
+      console.error("[agentmailbox] failed to initialize storage:", e);
+      process.exit(1);
+    });
 }

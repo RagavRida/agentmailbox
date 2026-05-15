@@ -7,7 +7,8 @@ import {
   Message,
   ParticipantRole,
   Thread,
-} from "./types";
+} from "../types";
+import { Storage } from "./interface";
 
 interface MessageRow {
   id: string;
@@ -30,7 +31,7 @@ interface ThreadRow {
   updated_at: number;
 }
 
-export class AgentMailboxStorage {
+export class SqliteStorage implements Storage {
   private db: Database.Database;
 
   constructor(path = "agentmailbox.db") {
@@ -39,7 +40,7 @@ export class AgentMailboxStorage {
     this.db.pragma("foreign_keys = ON");
   }
 
-  init(): void {
+  async init(): Promise<void> {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS agents (
         id TEXT PRIMARY KEY,
@@ -99,8 +100,8 @@ export class AgentMailboxStorage {
 
   // ---------- Agents ----------
 
-  registerAgent(agentId: AgentAddress): Agent {
-    const existing = this.getAgent(agentId);
+  async registerAgent(agentId: AgentAddress): Promise<Agent> {
+    const existing = await this.getAgent(agentId);
     if (existing) return existing;
     const createdAt = Date.now();
     this.db
@@ -109,7 +110,7 @@ export class AgentMailboxStorage {
     return { id: agentId, createdAt };
   }
 
-  getAgent(agentId: AgentAddress): Agent | null {
+  async getAgent(agentId: AgentAddress): Promise<Agent | null> {
     const row = this.db
       .prepare("SELECT id, created_at FROM agents WHERE id = ?")
       .get(agentId) as { id: string; created_at: number } | undefined;
@@ -135,10 +136,10 @@ export class AgentMailboxStorage {
     };
   }
 
-  createThread(
+  async createThread(
     participants: AgentAddress[],
     silentParticipants: AgentAddress[] = []
-  ): Thread {
+  ): Promise<Thread> {
     const id = uuidv4();
     const now = Date.now();
     const visibleKey = this.participantsKey(participants);
@@ -161,7 +162,7 @@ export class AgentMailboxStorage {
     };
   }
 
-  getThread(threadId: string): Thread | null {
+  async getThread(threadId: string): Promise<Thread | null> {
     const row = this.db
       .prepare(
         `SELECT id, participants, silent_participants, created_at, updated_at
@@ -169,15 +170,20 @@ export class AgentMailboxStorage {
       )
       .get(threadId) as ThreadRow | undefined;
     if (!row) return null;
-    const messages = this.getMessages(row.id);
+    const messages = this.getMessagesSync(row.id);
     return this.rowToThread(row, messages);
   }
 
-  getThreadByParticipants(a: AgentAddress, b: AgentAddress): Thread | null {
+  async getThreadByParticipants(
+    a: AgentAddress,
+    b: AgentAddress
+  ): Promise<Thread | null> {
     return this.getThreadByParticipantSet([a, b]);
   }
 
-  getThreadByParticipantSet(participants: AgentAddress[]): Thread | null {
+  async getThreadByParticipantSet(
+    participants: AgentAddress[]
+  ): Promise<Thread | null> {
     const key = this.participantsKey(participants);
     const row = this.db
       .prepare(
@@ -186,11 +192,14 @@ export class AgentMailboxStorage {
       )
       .get(key) as ThreadRow | undefined;
     if (!row) return null;
-    const messages = this.getMessages(row.id);
+    const messages = this.getMessagesSync(row.id);
     return this.rowToThread(row, messages);
   }
 
-  appendMessage(threadId: string, message: Message): void {
+  async appendMessage(threadId: string, message: Message): Promise<void> {
+    // better-sqlite3's db.transaction is sync-only; we keep the inner block
+    // synchronous to preserve the atomic fan-out guarantee, then expose it
+    // through the async interface.
     const tx = this.db.transaction((m: Message) => {
       const cc = Array.from(new Set(m.cc ?? []));
       const bcc = Array.from(new Set(m.bcc ?? []));
@@ -301,7 +310,7 @@ export class AgentMailboxStorage {
     return out;
   }
 
-  getMessages(threadId: string): Message[] {
+  private getMessagesSync(threadId: string): Message[] {
     const rows = this.db
       .prepare(
         `SELECT id, thread_id, from_agent, to_agent, cc, bcc, reply_to,
@@ -312,10 +321,14 @@ export class AgentMailboxStorage {
     return rows.map((r) => this.rowToMessage(r));
   }
 
-  getThreadParticipants(threadId: string): ParticipantRole[] {
-    const messages = this.getMessages(threadId);
+  async getMessages(threadId: string): Promise<Message[]> {
+    return this.getMessagesSync(threadId);
+  }
+
+  async getThreadParticipants(threadId: string): Promise<ParticipantRole[]> {
+    const messages = this.getMessagesSync(threadId);
     if (messages.length === 0) {
-      const thread = this.getThread(threadId);
+      const thread = await this.getThread(threadId);
       if (!thread) return [];
       return thread.participants.map((agentId) => ({
         agentId,
@@ -352,7 +365,7 @@ export class AgentMailboxStorage {
 
   // ---------- Mailbox ----------
 
-  getMailbox(agentId: AgentAddress): Mailbox {
+  async getMailbox(agentId: AgentAddress): Promise<Mailbox> {
     const rows = this.db
       .prepare(
         "SELECT thread_id, unread_count FROM mailboxes WHERE agent_id = ?"
@@ -363,7 +376,7 @@ export class AgentMailboxStorage {
     return { agentId, threads, unreadCount };
   }
 
-  markRead(agentId: AgentAddress, threadId: string): void {
+  async markRead(agentId: AgentAddress, threadId: string): Promise<void> {
     this.db
       .prepare(
         `UPDATE mailboxes SET unread_count = 0, last_synced_at = ?
@@ -372,7 +385,7 @@ export class AgentMailboxStorage {
       .run(Date.now(), agentId, threadId);
   }
 
-  getUnread(agentId: AgentAddress): Message[] {
+  async getUnread(agentId: AgentAddress): Promise<Message[]> {
     // A message is "for" this agent if they're in to / cc / bcc.
     // Fan-out happened via mailboxes table; use last_synced_at as the cursor.
     const rows = this.db
@@ -394,7 +407,7 @@ export class AgentMailboxStorage {
     return rows.map((r) => this.rowToMessage(r));
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close();
   }
 }

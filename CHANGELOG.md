@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+### Changed (breaking)
+
+- Storage layer is now pluggable. The concrete `AgentMailboxStorage` class
+  is replaced by a `Storage` interface and a `SqliteStorage` adapter, both
+  exported from `agentmailbox`. Every storage method is now `async` and
+  returns a `Promise`.
+- `createServer()` now returns `{ app, storage, ready }`. Callers must
+  `await ready` before serving traffic so schema migrations finish first.
+- New `createStorage(opts)` factory accepts a file path or a
+  `StorageOptions` object — preferred entry point for new code. The
+  Postgres branch is reserved but not yet implemented.
+
+### Deprecated
+
+- `AgentMailboxStorage` is re-exported as a `@deprecated` alias for
+  `SqliteStorage`. Scheduled for removal in 0.3.0.
+
+### Migration
+
+```diff
+-import { AgentMailboxStorage } from "agentmailbox";
+-const storage = new AgentMailboxStorage("./db.sqlite");
+-storage.init();
+-const agent = storage.registerAgent("alice@demo");
++import { createStorage } from "agentmailbox";
++const storage = createStorage("./db.sqlite");
++await storage.init();
++const agent = await storage.registerAgent("alice@demo");
+```
+
+```diff
+-const { app } = createServer("./db.sqlite");
+-app.listen(3000);
++const { app, ready } = createServer("./db.sqlite");
++await ready;
++app.listen(3000);
+```
+
 ## 0.1.0 — unreleased
 
 > Note: renamed from `agentmail` to `agentmailbox` before first publish
