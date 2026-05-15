@@ -6,6 +6,19 @@ for AI agents. Mirrors the JS SDK feature-for-feature.
 ## Install
 
 ```bash
+pip install agentsmcp
+```
+
+The PyPI distribution is named `agentsmcp` (matching the npm SDK); the
+import name stays `agentmailbox`:
+
+```python
+from agentmailbox import AgentMailbox
+```
+
+For local development from a clone:
+
+```bash
 pip install -e ".[dev]"
 ```
 

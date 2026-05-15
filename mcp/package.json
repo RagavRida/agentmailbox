@@ -28,12 +28,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RagavRida/agentmailbox.git",
+    "url": "git+https://github.com/RagavRida/agentsmcp.git",
     "directory": "mcp"
   },
-  "homepage": "https://github.com/RagavRida/agentmailbox/tree/main/mcp",
+  "homepage": "https://github.com/RagavRida/agentsmcp/tree/main/mcp",
   "bugs": {
-    "url": "https://github.com/RagavRida/agentmailbox/issues"
+    "url": "https://github.com/RagavRida/agentsmcp/issues"
   },
   "license": "MIT",
   "engines": {
