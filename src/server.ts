@@ -353,13 +353,16 @@ export function createServer(
         compressor,
         compressionThreshold,
       });
-      return res.status(200).json({
-        context: {
-          snapshot: ctx.snapshot,
-          threadSummary: ctx.threadSummary,
-          recentMessages: stripBccFromMessages(ctx.recentMessages, requester),
-        },
-      });
+      const responseContext: Record<string, unknown> = {
+        snapshot: ctx.snapshot,
+        threadSummary: ctx.threadSummary,
+        recentMessages: stripBccFromMessages(ctx.recentMessages, requester),
+        tokenCount: ctx.tokenCount,
+      };
+      if (ctx.threadSummaryStructured) {
+        responseContext.threadSummaryStructured = ctx.threadSummaryStructured;
+      }
+      return res.status(200).json({ context: responseContext });
     } catch (e) {
       next(e);
     }

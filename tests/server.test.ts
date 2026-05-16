@@ -137,6 +137,33 @@ describe("HTTP server (no auth)", () => {
       .participants.map((p) => p.agentId);
     expect(bccSelfRoles).toContain("bcc@x"); // bcc'd agent sees self
   });
+
+  it("/threads/:id/sync surfaces threadSummaryStructured once threshold is crossed", async () => {
+    // Default compressor is Noop; threshold is 20 uncovered older messages.
+    // Send 30 messages so older = 20, recent = 10.
+    let threadId = "";
+    for (let i = 0; i < 30; i++) {
+      const res = await postJson(`${server.url}/messages/send`, {
+        from: "a@x",
+        to: "b@x",
+        payload: { n: i },
+        contextSnapshot: { step: `s${i}` },
+      });
+      threadId = (res.data as { threadId: string }).threadId;
+    }
+    const sync = await getJson(`${server.url}/threads/${threadId}/sync`);
+    const ctx = (sync.data as {
+      context: {
+        recentMessages: unknown[];
+        tokenCount: number;
+        threadSummaryStructured?: { coversMessageIds: string[] };
+      };
+    }).context;
+    expect(ctx.recentMessages.length).toBe(10);
+    expect(typeof ctx.tokenCount).toBe("number");
+    expect(ctx.threadSummaryStructured).toBeDefined();
+    expect(ctx.threadSummaryStructured?.coversMessageIds.length).toBe(20);
+  });
 });
 
 describe("HTTP server (auth on)", () => {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — 2026-05-16
+
+### Fixed
+
+- `/threads/:id/sync` was hand-picking three fields from the assembled
+  context and silently dropped the new `threadSummaryStructured` and
+  `tokenCount`. MCP clients calling `agentsmcp_sync` therefore never
+  saw structured summaries on 0.3.0. Now passes them through. Added a
+  regression test that sends 30 messages and asserts the structured
+  summary lands on `/sync`.
+
 ## 0.3.0 — 2026-05-16
 
 ### Added
