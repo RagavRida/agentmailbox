@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.6 — 2026-05-16
+
+### Added
+
+- `OpenAICompressor` — second LLM-backed `Compressor` implementation.
+  Uses the `openai` SDK (declared as an optional peer dependency)
+  with `response_format: { type: "json_object" }` so the model is
+  forced to return valid JSON for structured extraction. Defaults to
+  `gpt-4o-mini`. Constructor signature mirrors `ClaudeCompressor`.
+- `scripts/smoke-openai-compressor.ts` — runnable end-to-end smoke
+  validating live compression against the real OpenAI API. Sends 25
+  messages on a research-decision thread, hits `/sync`, asserts the
+  structured summary has text, decisions, openQuestions, and a
+  populated artifacts map. Not part of `npm test`; gated on
+  `OPENAI_API_KEY`.
+
+### Notes
+
+- Shipping a second adapter proves the `Compressor` interface is
+  provider-agnostic — the design wasn't shaped around Claude's quirks.
+- ClaudeCompressor still does not have a live smoke. Untested against
+  a real Anthropic API call yet.
+
 ## 0.3.5 — 2026-05-16
 
 ### Fixed

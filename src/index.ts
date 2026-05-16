@@ -5,6 +5,8 @@ export {
   NoopCompressor,
   ClaudeCompressor,
   type ClaudeCompressorOptions,
+  OpenAICompressor,
+  type OpenAICompressorOptions,
 } from "./compression";
 export type { Compressor } from "./compression";
 export { createServer, type CreateServerOptions } from "./server";
