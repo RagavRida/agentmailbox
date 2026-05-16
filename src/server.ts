@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createStorage, Storage } from "./storage";
 import { Compressor, NoopCompressor } from "./compression";
 import { assembleContext } from "./context";
+import { readEnv } from "./env";
 import {
   AgentAddress,
   ContextFrame,
@@ -112,7 +113,8 @@ export function createServer(
   const storage = createStorage(dbPath);
   const ready = storage.init();
 
-  const apiKey = opts.apiKey ?? process.env.AGENTMAILBOX_API_KEY ?? "";
+  const apiKey =
+    opts.apiKey ?? readEnv("AGENTSMCP_API_KEY", "AGENTMAILBOX_API_KEY") ?? "";
   const compressor = opts.compressor ?? new NoopCompressor();
   const compressionThreshold = opts.compressionThreshold;
 
@@ -412,7 +414,8 @@ export function createServer(
 
 if (require.main === module) {
   const port = Number(process.env.PORT ?? 3000);
-  const dbPath = process.env.AGENTMAILBOX_DB ?? "agentmailbox.db";
+  const dbPath =
+    readEnv("AGENTSMCP_DB", "AGENTMAILBOX_DB") ?? "agentmailbox.db";
   const { app, ready } = createServer(dbPath);
   ready
     .then(() => {

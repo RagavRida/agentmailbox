@@ -11,7 +11,7 @@
 import { AgentMailbox } from "agentsmcp";
 import { complete } from "./llm";
 
-const SERVER = process.env.AGENTMAILBOX_SERVER ?? "http://localhost:43500";
+const SERVER = process.env.AGENTSMCP_SERVER ?? "http://localhost:43500";
 const ME = "explorer@demo";
 const SYNTHESIZER = "synthesizer@demo";
 const POLL_MS = 1500;

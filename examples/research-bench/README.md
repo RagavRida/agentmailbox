@@ -68,8 +68,8 @@ Add this to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "agentsmcp-adapter"],
       "env": {
-        "AGENTMAILBOX_AGENT_ID": "you@desktop",
-        "AGENTMAILBOX_SERVER": "http://localhost:43500"
+        "AGENTSMCP_AGENT_ID": "you@desktop",
+        "AGENTSMCP_SERVER": "http://localhost:43500"
       }
     }
   }
@@ -197,13 +197,13 @@ If you'd rather run each piece in its own terminal:
 
 ```bash
 # Terminal 1
-PORT=43500 AGENTMAILBOX_DB=./bench.db npm run server
+PORT=43500 AGENTSMCP_DB=./bench.db npm run server
 
 # Terminal 2
-AGENTMAILBOX_SERVER=http://localhost:43500 npm run explorer
+AGENTSMCP_SERVER=http://localhost:43500 npm run explorer
 
 # Terminal 3
-AGENTMAILBOX_SERVER=http://localhost:43500 npm run synthesizer
+AGENTSMCP_SERVER=http://localhost:43500 npm run synthesizer
 ```
 
 This is the layout used in the cold-restart walkthrough above.

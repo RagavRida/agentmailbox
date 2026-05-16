@@ -1,4 +1,4 @@
-"""API-key auth tests against a server with AGENTMAILBOX_API_KEY set."""
+"""API-key auth tests against a server with AGENTSMCP_API_KEY set."""
 
 from __future__ import annotations
 

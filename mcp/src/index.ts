@@ -37,7 +37,8 @@ function parseArgs(argv: string[]): Partial<Config> {
 function printUsage(): void {
   process.stderr.write(
     "usage: agentsmcp-adapter [--agent-id ID] [--server URL] [--api-key KEY]\n" +
-      "env: AGENTMAILBOX_AGENT_ID, AGENTMAILBOX_SERVER, AGENTMAILBOX_API_KEY\n"
+      "env: AGENTSMCP_AGENT_ID, AGENTSMCP_SERVER, AGENTSMCP_API_KEY\n" +
+      "     (legacy AGENTMAILBOX_* names still accepted; removed in 0.4.0)\n"
   );
 }
 
@@ -46,15 +47,37 @@ function die(msg: string): never {
   process.exit(1);
 }
 
+const legacyWarned = new Set<string>();
+function readEnv(newName: string, legacyName: string): string | undefined {
+  const fresh = process.env[newName];
+  if (fresh !== undefined && fresh !== "") return fresh;
+  const legacy = process.env[legacyName];
+  if (legacy !== undefined && legacy !== "") {
+    if (!legacyWarned.has(legacyName)) {
+      legacyWarned.add(legacyName);
+      process.stderr.write(
+        `agentsmcp-adapter: ${legacyName} is deprecated; prefer ${newName}. ` +
+          `Removed in 0.4.0.\n`
+      );
+    }
+    return legacy;
+  }
+  return undefined;
+}
+
 function resolveConfig(): Config {
   const args = parseArgs(process.argv.slice(2));
-  const agentId = args.agentId ?? process.env.AGENTMAILBOX_AGENT_ID ?? "";
+  const agentId =
+    args.agentId ?? readEnv("AGENTSMCP_AGENT_ID", "AGENTMAILBOX_AGENT_ID") ?? "";
   const server =
-    args.server ?? process.env.AGENTMAILBOX_SERVER ?? "http://localhost:3000";
-  const apiKey = args.apiKey ?? process.env.AGENTMAILBOX_API_KEY;
+    args.server ??
+    readEnv("AGENTSMCP_SERVER", "AGENTMAILBOX_SERVER") ??
+    "http://localhost:3000";
+  const apiKey =
+    args.apiKey ?? readEnv("AGENTSMCP_API_KEY", "AGENTMAILBOX_API_KEY");
   if (!agentId) {
     die(
-      "AGENTMAILBOX_AGENT_ID is required (or pass --agent-id). " +
+      "AGENTSMCP_AGENT_ID is required (or pass --agent-id). " +
         "This identifies the agent this MCP server represents."
     );
   }

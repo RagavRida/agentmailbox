@@ -1,10 +1,11 @@
 {
   "name": "agentsmcp",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Context-sync protocol for AI agents. Every agent has a mailbox.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "agentsmcp-server": "dist/server.js",
     "agentmailbox-server": "dist/server.js"
   },
   "files": [

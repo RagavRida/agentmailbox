@@ -11,13 +11,13 @@ import path from "path";
 import { createServer } from "agentsmcp";
 
 const PORT = Number(process.env.PORT ?? 43500);
-const DB = process.env.AGENTMAILBOX_DB ?? path.join(__dirname, "..", "bench.db");
+const DB = process.env.AGENTSMCP_DB ?? path.join(__dirname, "..", "bench.db");
 const SERVER_URL = `http://localhost:${PORT}`;
 
 function spawnAgent(name: string, file: string): ChildProcess {
   const child = spawn("npx", ["ts-node", file], {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, AGENTMAILBOX_SERVER: SERVER_URL },
+    env: { ...process.env, AGENTSMCP_SERVER: SERVER_URL },
     stdio: ["ignore", "inherit", "inherit"],
   });
   process.stdout.write(`[start] spawned ${name} (pid=${child.pid})\n`);

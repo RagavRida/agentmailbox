@@ -64,7 +64,7 @@ def _spawn_server(env_extra: Optional[dict[str, str]] = None) -> _Server:
 
     env = os.environ.copy()
     env["PORT"] = str(port)
-    env["AGENTMAILBOX_DB"] = db_path
+    env["AGENTSMCP_DB"] = db_path
     if env_extra:
         env.update(env_extra)
 
@@ -124,12 +124,12 @@ def agentmailbox_server() -> Iterator[str]:
 
 @pytest.fixture(scope="session")
 def agentmailbox_server_with_auth() -> Iterator[tuple[str, str]]:
-    """Boot a second AgentMailbox server with AGENTMAILBOX_API_KEY set.
+    """Boot a second AgentMailbox server with AGENTSMCP_API_KEY set.
 
     Yields (url, api_key).
     """
     api_key = "pytest-secret-XYZ"
-    server = _spawn_server({"AGENTMAILBOX_API_KEY": api_key})
+    server = _spawn_server({"AGENTSMCP_API_KEY": api_key})
     try:
         yield server.url, api_key
     finally:

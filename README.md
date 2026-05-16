@@ -57,13 +57,13 @@ npm install -g agentsmcp-adapter
 ### 1. Start the server
 
 ```bash
-npx agentmailbox-server
+npx agentsmcp-server
 # or, from a clone:
 npm run start
 ```
 
 Defaults: `http://localhost:3000`, SQLite at `./agentmailbox.db`.
-Override with `PORT` and `AGENTMAILBOX_DB` env vars.
+Override with `PORT` and `AGENTSMCP_DB` env vars.
 
 ### 2. Send a message
 
@@ -198,8 +198,8 @@ adapter instance represents one agent identity.
       "command": "npx",
       "args": ["-y", "agentsmcp-adapter"],
       "env": {
-        "AGENTMAILBOX_AGENT_ID": "claude@local",
-        "AGENTMAILBOX_SERVER": "http://localhost:3000"
+        "AGENTSMCP_AGENT_ID": "claude@local",
+        "AGENTSMCP_SERVER": "http://localhost:3000"
       }
     }
   }
@@ -225,13 +225,13 @@ Eight tools and two read-only resources are exposed. See
 
 ## Authentication
 
-Set `AGENTMAILBOX_API_KEY` on the server and pass `apiKey` to every
+Set `AGENTSMCP_API_KEY` on the server and pass `apiKey` to every
 SDK constructor. With the env var unset the server is open; with it
 set, every route except `/health` requires
 `Authorization: Bearer <key>` and returns 401 otherwise.
 
 ```bash
-AGENTMAILBOX_API_KEY=s3cret npx agentmailbox-server
+AGENTSMCP_API_KEY=s3cret npx agentsmcp-server
 ```
 
 ```ts

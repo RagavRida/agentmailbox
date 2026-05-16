@@ -11,7 +11,7 @@ import os
 from agentmailbox import AgentMailbox
 
 
-SERVER = os.environ.get("AGENTMAILBOX_SERVER", "http://localhost:3000")
+SERVER = os.environ.get("AGENTSMCP_SERVER", "http://localhost:3000")
 
 
 async def main() -> None:

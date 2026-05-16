@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.3 — 2026-05-16
+
+### Added
+
+- New env var names matching the package name:
+  - `AGENTSMCP_API_KEY` (was `AGENTMAILBOX_API_KEY`)
+  - `AGENTSMCP_DB` (was `AGENTMAILBOX_DB`)
+  - `AGENTSMCP_SERVER` (used by the MCP adapter and examples; was `AGENTMAILBOX_SERVER`)
+  - `AGENTSMCP_AGENT_ID` (used by the MCP adapter; was `AGENTMAILBOX_AGENT_ID`)
+- New CLI bin `agentsmcp-server` pointing at the same compiled
+  entrypoint as `agentmailbox-server`.
+
+### Deprecated
+
+- Legacy `AGENTMAILBOX_*` env vars and the `agentmailbox-server` bin
+  name continue to work for one minor version. The server warns once
+  on stderr when a legacy env var is read. Both will be removed in
+  0.4.0.
+
+### Migration
+
+```diff
+-AGENTMAILBOX_API_KEY=s3cret npx agentmailbox-server
++AGENTSMCP_API_KEY=s3cret npx agentsmcp-server
+```
+
+```diff
+ {
+   "mcpServers": {
+     "agentsmcp": {
+       "command": "npx",
+       "args": ["-y", "agentsmcp-adapter"],
+       "env": {
+-        "AGENTMAILBOX_AGENT_ID": "claude@local",
+-        "AGENTMAILBOX_SERVER": "http://localhost:3000"
++        "AGENTSMCP_AGENT_ID": "claude@local",
++        "AGENTSMCP_SERVER": "http://localhost:3000"
+       }
+     }
+   }
+ }
+```
+
 ## 0.3.2 — 2026-05-16
 
 ### Fixed

@@ -16,13 +16,13 @@ This pulls in the `agentsmcp` SDK as a dependency — no separate setup.
 
 Required:
 
-- `AGENTMAILBOX_AGENT_ID` — the agent identity this MCP server represents
+- `AGENTSMCP_AGENT_ID` — the agent identity this MCP server represents
   (e.g. `claude@local`).
 
 Optional:
 
-- `AGENTMAILBOX_SERVER` — HTTP server URL, defaults to `http://localhost:3000`.
-- `AGENTMAILBOX_API_KEY` — passed through as a Bearer token.
+- `AGENTSMCP_SERVER` — HTTP server URL, defaults to `http://localhost:3000`.
+- `AGENTSMCP_API_KEY` — passed through as a Bearer token.
 
 CLI flags mirror env vars and take precedence:
 
@@ -30,7 +30,7 @@ CLI flags mirror env vars and take precedence:
 agentsmcp-adapter --agent-id claude@local --server http://localhost:3000
 ```
 
-Make sure the AgentMailbox HTTP server is running first (`npx agentmailbox-server`
+Make sure the AgentMailbox HTTP server is running first (`npx agentsmcp-server`
 or `npm start` in a clone).
 
 ## Claude Desktop config
@@ -44,8 +44,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "agentsmcp-adapter"],
       "env": {
-        "AGENTMAILBOX_AGENT_ID": "claude@local",
-        "AGENTMAILBOX_SERVER": "http://localhost:3000"
+        "AGENTSMCP_AGENT_ID": "claude@local",
+        "AGENTSMCP_SERVER": "http://localhost:3000"
       }
     }
   }
@@ -55,7 +55,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ## Cursor / Continue / other MCP clients
 
 Same shape — point them at `npx -y agentsmcp-adapter` with
-`AGENTMAILBOX_AGENT_ID` set.
+`AGENTSMCP_AGENT_ID` set.
 
 ## Available tools
 
