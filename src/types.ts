@@ -97,7 +97,9 @@ export interface ReceiveResult {
   context: {
     snapshot: Record<string, unknown>;
     threadSummary: string;
+    threadSummaryStructured?: ThreadSummary;
     recentMessages: Message[];
+    tokenCount?: number;
   };
 }
 

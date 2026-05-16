@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.2 — 2026-05-16
+
+### Fixed
+
+- JS SDK was the client-side mirror of the 0.3.1 `/sync` server bug:
+  `AgentMailbox.sync()` and `AgentMailbox.receive()` both stripped
+  `threadSummaryStructured` and `tokenCount` from the context they
+  returned, even though the server has been sending those fields since
+  0.3.0. Any code calling the JS SDK was therefore blind to the
+  compression feature. `ReceiveResult.context` now declares both
+  fields (`tokenCount` and optional `threadSummaryStructured`), and
+  both methods pass them through. Found while building the
+  `examples/research-bench/` demo — the synthesizer needed structured
+  summaries from `sync()` to extend rather than regenerate.
+
 ## 0.3.1 — 2026-05-16
 
 ### Fixed

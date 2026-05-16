@@ -6,6 +6,7 @@ import {
   ReceiveResult,
   SendOptions,
   Thread,
+  ThreadSummary,
 } from "./types";
 
 export interface AgentMailboxConfig {
@@ -101,17 +102,21 @@ export class AgentMailbox {
     const filtered = from ? messages.filter((m) => m.from === from) : messages;
 
     const last = filtered[filtered.length - 1];
-    const context = last
+    const context: ReceiveResult["context"] = last
       ? {
           snapshot: last.context.snapshot,
           threadSummary: last.context.threadSummary,
           recentMessages: last.context.recentMessages,
+          tokenCount: last.context.tokenCount,
         }
       : {
           snapshot: {},
           threadSummary: "",
           recentMessages: [] as Message[],
         };
+    if (last?.context.threadSummaryStructured) {
+      context.threadSummaryStructured = last.context.threadSummaryStructured;
+    }
 
     return { messages: filtered, context };
   }
@@ -128,14 +133,18 @@ export class AgentMailbox {
     context: {
       snapshot: Record<string, unknown>;
       threadSummary: string;
+      threadSummaryStructured?: ThreadSummary;
       recentMessages: Message[];
+      tokenCount?: number;
     };
   }> {
     return this.request<{
       context: {
         snapshot: Record<string, unknown>;
         threadSummary: string;
+        threadSummaryStructured?: ThreadSummary;
         recentMessages: Message[];
+        tokenCount?: number;
       };
     }>(
       "GET",
