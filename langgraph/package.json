@@ -1,0 +1,52 @@
+{
+  "name": "agentsmcp-langgraph",
+  "version": "0.1.0",
+  "description": "LangGraph BaseCheckpointSaver backed by agentsmcp (AgentMailbox). Drop-in checkpointer for LangGraph.js — your graph state lives in an AgentMailbox thread.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "langgraph",
+    "langchain",
+    "checkpointer",
+    "agents",
+    "agentsmcp",
+    "agentmailbox"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RagavRida/agentsmcp.git",
+    "directory": "langgraph"
+  },
+  "homepage": "https://github.com/RagavRida/agentsmcp/tree/main/langgraph",
+  "bugs": {
+    "url": "https://github.com/RagavRida/agentsmcp/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "agentsmcp": ">=0.3.5 <0.5.0"
+  },
+  "peerDependencies": {
+    "@langchain/langgraph-checkpoint": ">=0.0.10"
+  },
+  "devDependencies": {
+    "@langchain/langgraph-checkpoint": "^0.0.10",
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0"
+  }
+}
