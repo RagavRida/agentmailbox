@@ -1,6 +1,16 @@
 import { Message, ThreadSummary } from "../types";
 import { Compressor } from "./interface";
 
+/**
+ * Status: the parsing, coercion, and prev-extension paths are covered
+ * by mock-based unit tests in `tests/claude-compressor.test.ts`, but
+ * this compressor has **not been validated against a real Anthropic
+ * API call**. `OpenAICompressor` has been (see
+ * `scripts/smoke-openai-compressor.ts`). Contributions running the
+ * Claude live smoke and reporting back are welcome — the equivalent
+ * script for Anthropic is the same shape, just swap the import.
+ */
+
 export interface ClaudeCompressorOptions {
   /**
    * Anthropic API key. Falls back to `ANTHROPIC_API_KEY` env var. If neither

@@ -282,8 +282,13 @@ deliberately stable, but there is a lot of useful work still to do.
 
 **Particularly wanted:**
 
-- Additional `Compressor` adapters (OpenAI, Gemini, Bedrock, Ollama
-  for local models). The interface is small — ~80 lines per adapter.
+- Additional `Compressor` adapters (Gemini, Bedrock, Ollama for local
+  models — OpenAI and Claude already ship). The interface is small —
+  ~80 lines per adapter.
+- A live smoke test for `ClaudeCompressor`. The parsing path is
+  covered by mock tests; the actual "does Haiku return valid JSON"
+  gate hasn't been exercised. `scripts/smoke-openai-compressor.ts`
+  is the template — same shape, swap the import.
 - Additional `Storage` adapters (Postgres, Redis). The `Storage`
   interface is async-first and provider-agnostic; SQLite is the
   reference implementation.

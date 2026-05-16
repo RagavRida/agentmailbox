@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.7 — 2026-05-16
+
+### Added
+
+- 7 mock-based unit tests for `ClaudeCompressor` covering JSON
+  parsing, code-fence stripping, malformed-response handling, type
+  filtering, prev-summary union, no-op short-circuit, and prompt
+  shape. The compressor remains untested against a real Anthropic
+  API call; the live gap is now flagged in the JSDoc and the README's
+  Contributing section.
+
 ## 0.3.6 — 2026-05-16
 
 ### Added
