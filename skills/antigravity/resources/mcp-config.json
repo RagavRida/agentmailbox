@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agentsmcp": {
+      "command": "npx",
+      "args": ["-y", "agentsmcp-adapter"],
+      "env": {
+        "AGENTSMCP_AGENT_ID": "gemini@local",
+        "AGENTSMCP_SERVER": "http://localhost:3000"
+      }
+    }
+  }
+}

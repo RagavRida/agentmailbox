@@ -1,0 +1,52 @@
+---
+description: AgentMailbox context sync — automatically check for context from previous sessions and other agents, and preserve context when sessions end
+globs: "**/*"
+alwaysApply: true
+---
+
+# AgentMailbox Context Sync
+
+You have access to AgentMailbox via MCP tools. Use these tools to maintain
+persistent context across sessions and coordinate with other agents.
+
+## On Session Start
+
+Always check for unread messages at the beginning of a session:
+
+1. Call `agentsmcp_receive` to get unread messages
+2. If messages exist, summarize the context for the user
+3. If a relevant thread exists, call `agentsmcp_sync` with the threadId
+
+## During Work
+
+When the user makes important decisions or completes significant tasks:
+
+1. Call `agentsmcp_send` to record the decision/progress to the thread
+2. Include structured data: `decisions`, `filesChanged`, `status`, `openQuestions`
+3. Include a `contextSnapshot` with the current state
+
+## On Task Completion
+
+When a task or session is wrapping up:
+
+1. Call `agentsmcp_send` with a session summary including:
+   - What was accomplished
+   - Files modified
+   - Decisions made
+   - Remaining tasks
+   - Open questions
+
+## Multi-Agent Coordination
+
+When the user mentions other agents, teams, or cross-tool work:
+
+1. Use `agentsmcp_send` with `to`, `cc`, and `bcc` as appropriate
+2. Use `agentsmcp_reply_all` to update all participants on a thread
+3. Use `agentsmcp_participants` to see who's on a thread
+
+## Cross-Platform Handoff
+
+When the user is switching to another tool (Claude Desktop, Antigravity, etc.):
+
+1. Send a handoff message with current state and remaining tasks
+2. The other tool will receive the full thread context automatically

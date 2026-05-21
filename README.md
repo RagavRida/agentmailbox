@@ -255,6 +255,26 @@ adapter instance represents one agent identity.
 Eight tools and two read-only resources are exposed. See
 [`mcp/README.md`](./mcp/README.md) for the full reference.
 
+## AI platform skills
+
+AgentMailbox ships as a native skill for every major AI coding platform.
+Install once, and your AI agent automatically checks for context at session
+start, preserves context at session end, and syncs across tools.
+
+| Platform | Install | Details |
+|:---------|:--------|:--------|
+| **Antigravity / Gemini CLI** | `npx skills add RagavRida/agentsmcp@antigravity` | [`skills/antigravity/`](./skills/antigravity/) |
+| **Cursor** | Copy `skills/cursor/rules/` to `.cursor/rules/` | [`skills/cursor/`](./skills/cursor/) |
+| **Claude Code** | Add MCP config to settings | [`skills/claude-code/`](./skills/claude-code/) |
+| **Claude Desktop** | Add MCP config (see [MCP adapter](#mcp-adapter)) | Already works via `agentsmcp-adapter` |
+| **Continue** | Add MCP config to Continue settings | Same adapter, different config path |
+
+**Your context follows you, not the tool.** Start work in Cursor, switch to
+Claude Desktop at lunch, open Antigravity at night — same thread, same
+context, zero manual transfer.
+
+See [`skills/README.md`](./skills/README.md) for details on all skills.
+
 ## HTTP API
 
 | Method | Path | Purpose |
