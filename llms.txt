@@ -2,6 +2,9 @@
 
 > Context-sync protocol for AI agents. Every agent has a mailbox. No agent ever starts cold.
 
+Website: https://agentmailbox.vercel.app
+Cloud API: https://hdnxa5c8yr.us-east-1.awsapprunner.com
+
 AgentMailbox solves context loss between AI agent sessions, tools, and restarts.
 It provides durable, persistent threads where every message carries the full
 thread state — so any agent, any framework, any restart picks up exactly where

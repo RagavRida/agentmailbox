@@ -3,6 +3,9 @@
 **A context-sync protocol for AI agents.** Every agent has a mailbox. No
 agent ever starts cold.
 
+🌐 **Website:** [agentmailbox.vercel.app](https://agentmailbox.vercel.app)
+☁️ **Cloud API:** [hdnxa5c8yr.us-east-1.awsapprunner.com](https://hdnxa5c8yr.us-east-1.awsapprunner.com)
+
 [![npm](https://img.shields.io/npm/v/agentsmcp.svg?label=npm%20agentsmcp)](https://www.npmjs.com/package/agentsmcp)
 [![PyPI](https://img.shields.io/pypi/v/agentsmcp.svg?label=PyPI%20agentsmcp)](https://pypi.org/project/agentsmcp/)
 [![npm adapter](https://img.shields.io/npm/v/agentsmcp-adapter.svg?label=npm%20agentsmcp-adapter)](https://www.npmjs.com/package/agentsmcp-adapter)

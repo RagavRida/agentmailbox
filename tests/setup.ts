@@ -19,10 +19,20 @@ export function freshDb(): { dir: string; path: string } {
 }
 
 export async function startServer(
-  opts: CreateServerOptions = {}
+  opts: CreateServerOptions = {},
+  dbUrl?: string
 ): Promise<TestServer> {
-  const { dir, path } = freshDb();
-  const { app, ready } = createServer(path, opts);
+  let dir: string | null = null;
+  let dbPath: string;
+  if (dbUrl) {
+    // Postgres path — caller is responsible for cleaning up the DB.
+    dbPath = dbUrl;
+  } else {
+    const fresh = freshDb();
+    dir = fresh.dir;
+    dbPath = fresh.path;
+  }
+  const { app, ready } = createServer(dbPath, opts);
   await ready;
   return await new Promise<TestServer>((resolve) => {
     const server: Server = app.listen(0, "127.0.0.1", () => {
@@ -31,14 +41,16 @@ export async function startServer(
       resolve({
         url,
         port: addr.port,
-        dbPath: path,
+        dbPath,
         close: () =>
           new Promise<void>((done) => {
             server.close(() => {
-              try {
-                rmSync(dir, { recursive: true, force: true });
-              } catch {
-                /* best-effort */
+              if (dir) {
+                try {
+                  rmSync(dir, { recursive: true, force: true });
+                } catch {
+                  /* best-effort */
+                }
               }
               done();
             });

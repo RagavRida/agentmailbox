@@ -6,13 +6,19 @@
 #
 # Env vars to set in the App Runner console (NOT here — keep secrets
 # out of git):
-#   AGENTSMCP_API_KEY  required for the public demo, otherwise anyone
-#                      can write to the mailbox.
+#   AGENTSMCP_API_KEY  set ONLY for private/self-hosted deploys. The
+#                      hosted free tier leaves this unset and relies on
+#                      rate limiting + CORS instead.
+#   AGENTSMCP_DB       postgres connection string for RDS. See
+#                      infra/README.md for the exact shape:
+#                      postgresql://agentsmcp:<password>@<endpoint>:5432/agentsmcp
 #
-# Optional env vars (defaults are fine for a stateless demo):
-#   PORT              defaults to 8080.
-#   AGENTSMCP_DB      defaults to :memory: (wiped on restart). Set to
-#                     a writeable path if you mount persistent storage.
+# Optional env vars:
+#   CLOUD_MODE         "true" enables trust-proxy, CORS, rate limits,
+#                      and the /usage/:identifier endpoint. Off by
+#                      default — self-hosted users do nothing.
+#   PORT               defaults to 8080.
+#   POSTGRES_POOL_MAX  pg.Pool max size. Defaults to 10.
 version: 1.0
 runtime: docker
 build:
@@ -25,5 +31,14 @@ run:
     port: 8080
     env: PORT
   env:
+    # CLOUD_MODE turns on hosted-tier behaviour: rate limits, CORS, trust
+    # proxy. The actual DATABASE_URL / API_KEY values are injected via the
+    # App Runner console so they never land in git.
+    - name: CLOUD_MODE
+      value: "true"
+    - name: PORT
+      value: "8080"
+    # Placeholder — overridden by the App Runner service env. See
+    # infra/app-runner-update.sh for the live wiring.
     - name: AGENTSMCP_DB
-      value: ":memory:"
+      value: "postgresql://agentsmcp:CHANGE_ME@CHANGE_ME:5432/agentsmcp"

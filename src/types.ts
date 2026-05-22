@@ -108,3 +108,24 @@ export interface ParticipantRole {
   role: "to" | "cc" | "bcc";
   joinedAt: number;
 }
+
+export interface AgentCardSkill {
+  id: string;
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+}
+
+export interface AgentCard {
+  name: string;
+  description: string;
+  url: string;
+  version: string;
+  capabilities: Record<string, boolean>;
+  skills?: AgentCardSkill[];
+  provider: { organization: string; url: string };
+  securitySchemes: Record<string, { type: string; scheme: string }>;
+  authentication: "required" | "none";
+  [k: string]: unknown;
+}

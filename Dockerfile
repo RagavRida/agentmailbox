@@ -31,7 +31,6 @@ RUN addgroup -S agentsmcp && adduser -S agentsmcp -G agentsmcp
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
-COPY LICENSE README.md ./
 
 # App Runner hits port 8080 by default; honour PORT if explicitly set.
 ENV PORT=8080
