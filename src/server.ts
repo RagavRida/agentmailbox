@@ -806,14 +806,17 @@ export function createServer(
       }
     });
 
-    // DELETE /auth/keys/:keyId — revoke (soft delete). Refuses to revoke
-    // the current request's key.
+    // DELETE /auth/keys/:keyId — revoke (soft delete). When authenticated via
+    // API key, refuses to revoke the key being used. JWT sessions have no such
+    // restriction since they don't use an API key for auth.
     app.delete("/auth/keys/:keyId", async (req: Request, res: Response, next: NextFunction) => {
       try {
-        if (!req.userId || !req.apiKeyId) {
+        if (!req.userId) {
           return res.status(401).json({ error: "invalid_api_key" });
         }
-        const ok = await revokeKey(cloudPool!, req.params.keyId, req.userId, req.apiKeyId);
+        // JWT session auth: apiKeyId is undefined — skip the self-revoke guard.
+        const currentKeyId = req.apiKeyId ?? "__session__";
+        const ok = await revokeKey(cloudPool!, req.params.keyId, req.userId, currentKeyId);
         if (!ok) return res.status(404).json({ error: "key_not_found" });
         return res.status(200).json({ ok: true });
       } catch (e) {
