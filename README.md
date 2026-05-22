@@ -26,161 +26,277 @@ The protocol is implemented as an HTTP server with SDKs in JavaScript
 and Python, plus a Model Context Protocol adapter that exposes it to
 Claude Desktop, Cursor, Continue, and every other MCP-aware client.
 
-## Try it without installing the server
-
-A public demo server runs at
-**https://hdnxa5c8yr.us-east-1.awsapprunner.com**.
-
-Quick gut check:
+## Quick Start (Cloud)
 
 ```bash
-curl https://hdnxa5c8yr.us-east-1.awsapprunner.com/health
-# {"ok":true}
+# 1. Get your free API key (no credit card)
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com"}'
+
+# Returns: { "apiKey": "sk_live_xxx...", "userId": "..." }
+
+# 2. Add it to your AI tool (platform guides below).
+# 3. Your agents now have persistent context across sessions.
 ```
 
-Point any SDK at it and send a real message:
+The hosted API is multi-tenant: your agents, threads, and messages are
+isolated to your user. Free tier limits are below.
 
-```ts
-import { AgentMailbox } from "agentsmcp";
+## Platform Integration Guides
 
-const alice = new AgentMailbox({
-  agentId: "alice@demo",
-  server: "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
-});
-await alice.connect();
-const { threadId } = await alice.send("bob@demo", { task: "hi" });
+Replace `sk_live_YOUR_KEY` with the key from step 1 in every snippet
+below.
+
+### Cursor
+
+Add to your MCP settings (**Settings → MCP → Add**):
+
+```json
+{
+  "mcpServers": {
+    "agentsmcp": {
+      "command": "npx",
+      "args": ["-y", "agentsmcp-adapter"],
+      "env": {
+        "AGENTSMCP_AGENT_ID": "cursor@local",
+        "AGENTSMCP_SERVER": "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
+        "AGENTSMCP_API_KEY": "sk_live_YOUR_KEY"
+      }
+    }
+  }
+}
+```
+
+That's it. Cursor now syncs context across sessions automatically.
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "agentsmcp": {
+      "command": "npx",
+      "args": ["-y", "agentsmcp-adapter"],
+      "env": {
+        "AGENTSMCP_AGENT_ID": "claude@desktop",
+        "AGENTSMCP_SERVER": "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
+        "AGENTSMCP_API_KEY": "sk_live_YOUR_KEY"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. It now has access to agentsmcp tools.
+
+### Antigravity / Gemini CLI
+
+```bash
+npx skills add RagavRida/agentsmcp
+```
+
+Or add MCP config manually in your settings.
+
+### Claude Code
+
+```bash
+claude mcp add agentsmcp -- npx -y agentsmcp-adapter
+```
+
+Set environment variables:
+
+```
+AGENTSMCP_AGENT_ID=claude-code@local
+AGENTSMCP_SERVER=https://hdnxa5c8yr.us-east-1.awsapprunner.com
+AGENTSMCP_API_KEY=sk_live_YOUR_KEY
+```
+
+### Any MCP Client (Continue, Cline, Windsurf, …)
+
+AgentMailbox works with any MCP-compatible client. Add the same config
+shape (`command: npx`, `args: ["-y", "agentsmcp-adapter"]`) with the
+three env vars: `AGENTSMCP_AGENT_ID`, `AGENTSMCP_SERVER`,
+`AGENTSMCP_API_KEY`.
+
+### Python
+
+```bash
+pip install agentsmcp
 ```
 
 ```python
 from agentmailbox import AgentMailbox
 
-async with AgentMailbox(
-    "alice@demo",
+agent = AgentMailbox(
+    agent_id="my-agent@app",
     server="https://hdnxa5c8yr.us-east-1.awsapprunner.com",
-) as alice:
-    await alice.connect()
-    result = await alice.send("bob@demo", {"task": "hi"})
+    api_key="sk_live_YOUR_KEY",
+)
+
+# Send
+await agent.send("other-agent@app", {"task": "analyze data"})
+
+# Receive (with full thread context)
+messages = await agent.receive()
 ```
 
-> **Demo caveats.** Open access, no SLA, in-memory storage — data
-> wipes on every container restart and agent IDs collide across
-> users. Don't put real data on it. For anything beyond kicking the
-> tires, run your own server with the [Install](#install) instructions
-> below or [deploy your own](./deploy/AWS.md).
+> The PyPI package name is `agentsmcp`; the import path stays
+> `agentmailbox` for historical reasons.
+
+### JavaScript / TypeScript
+
+```bash
+npm install agentsmcp
+```
+
+```ts
+import { AgentMailbox } from "agentsmcp";
+
+const agent = new AgentMailbox({
+  agentId: "my-agent@app",
+  server: "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
+  apiKey: "sk_live_YOUR_KEY",
+});
+
+await agent.send("other@app", { task: "done", result: data });
+const { messages } = await agent.receive();
+```
+
+### REST API (Any Language)
+
+Works from any language that can make HTTP calls.
+
+```bash
+# Register agent
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/agents/register \
+  -H "Authorization: Bearer sk_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agentId":"my-agent@app"}'
+
+# Send message (with optional CC/BCC)
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/messages/send \
+  -H "Authorization: Bearer sk_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "agent-a@app",
+    "to": "agent-b@app",
+    "payload": {"task": "analyze", "data": [1, 2, 3]},
+    "cc": ["observer@app"],
+    "bcc": ["logger@app"]
+  }'
+
+# Get unread messages (with full thread context)
+curl https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/unread \
+  -H "Authorization: Bearer sk_live_YOUR_KEY"
+
+# Sync thread context
+curl https://hdnxa5c8yr.us-east-1.awsapprunner.com/threads/THREAD_ID/sync \
+  -H "Authorization: Bearer sk_live_YOUR_KEY"
+
+# Mark thread as read
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/read \
+  -H "Authorization: Bearer sk_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"threadId":"THREAD_ID"}'
+```
+
+## Self-Hosted
+
+Free, unlimited, MIT-licensed. SQLite by default, Postgres when you
+need it.
+
+```bash
+# SQLite (zero config — single file at ./agentmailbox.db)
+npx agentsmcp-server
+
+# Postgres
+AGENTSMCP_DB=postgresql://user:pass@localhost:5432/agentsmcp \
+  npx agentsmcp-server
+
+# RDS (or any Postgres requiring SSL)
+AGENTSMCP_DB=postgresql://user:pass@host:5432/db \
+AGENTSMCP_DB_SSL=true \
+  npx agentsmcp-server
+
+# Single-key auth (everyone uses the same Bearer token)
+AGENTSMCP_API_KEY=your-secret npx agentsmcp-server
+
+# LLM-backed context compression
+ANTHROPIC_API_KEY=sk-ant-xxx npx agentsmcp-server
+```
+
+Self-hosting skips all per-user auth and plan caps — point your SDKs at
+your own server and you're done. See [deploy/AWS.md](./deploy/AWS.md)
+for a step-by-step Docker + App Runner walkthrough, or
+[infra/README.md](./infra/README.md) for the Postgres + VPC connector
+production layout.
+
+## API Reference
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| POST | `/auth/register` | None | Sign up, get API key |
+| GET | `/auth/me` | Bearer | Your account + current usage |
+| GET | `/auth/keys` | Bearer | List your active API keys (never returns the full key) |
+| POST | `/auth/keys` | Bearer | Mint an additional key |
+| DELETE | `/auth/keys/:keyId` | Bearer | Revoke a key (can't revoke the current one) |
+| POST | `/agents/register` | Bearer | Register an agent |
+| POST | `/messages/send` | Bearer | Send message (TO / CC / BCC) |
+| POST | `/messages/reply-all` | Bearer | Reply to every visible participant |
+| GET | `/mailbox/:agentId` | Bearer | List threads |
+| GET | `/mailbox/:agentId/unread` | Bearer | Unread messages + full thread context |
+| POST | `/mailbox/:agentId/read` | Bearer | Mark thread as read |
+| GET | `/threads/:threadId` | Bearer | Thread detail |
+| GET | `/threads/:threadId/sync` | Bearer | Assembled context frame |
+| GET | `/threads/:threadId/participants` | Bearer | Participants with roles |
+| GET | `/usage/:identifier` | None | Current rate-limit usage (cloud only) |
+| GET | `/health` | None | Health check |
+| GET | `/.well-known/agent-card.json` | None | A2A v1.0 Agent Card |
+| GET | `/.well-known/agent-card/:agentId` | None | Per-agent A2A card |
+
+`Bearer` = `Authorization: Bearer sk_live_xxx` (cloud) or
+`Authorization: Bearer <AGENTSMCP_API_KEY>` (self-hosted, when set).
+
+## Free Tier
+
+The hosted cloud API is free with soft limits:
+
+| Resource | Limit |
+|:---|:---|
+| Agents | 10 |
+| Messages / day | 500 |
+| Threads | 100 |
+| Retention | 7 days |
+| API keys per account | 2 |
+
+Hit a limit and the offending request returns `403 plan_limit` with the
+current/limit values. Need more? [Self-host](#self-hosted) for unlimited
+— same code, MIT licensed.
 
 ## What you get
 
 - **Durable, addressable threads.** Send a message to `writer@app`;
-  the server creates the thread, persists it, and fans it out to
-  every recipient (`to`, `cc`, `bcc`).
+  the server creates the thread, persists it, and fans it out to every
+  recipient (`to`, `cc`, `bcc`).
 - **Cold-restart by construction.** An agent process can crash mid-task
   and resume on restart by reading the thread — no local state, no
   checkpointing logic to write.
 - **Structured context compression.** Threads stay joinable forever:
-  older messages fold into a structured summary
-  (`decisions`, `openQuestions`, `artifacts`) the moment they cross
-  a configurable threshold. Default is zero-config; opt in to
-  Claude-backed compression with one constructor argument.
+  older messages fold into a structured summary (`decisions`,
+  `openQuestions`, `artifacts`) the moment they cross a configurable
+  threshold. Default is zero-config; opt in to Claude-backed
+  compression with one constructor argument.
 - **Cross-tool peer participation.** Any MCP-aware client becomes a
   peer in the conversation without writing SDK code.
 - **Multi-agent semantics.** TO / CC / BCC roles work the way email
   does, with full context propagated to every recipient.
-
-## Install
-
-```bash
-# JavaScript / TypeScript SDK + HTTP server
-npm install agentsmcp
-
-# Python SDK (PyPI distribution name; import path stays `agentmailbox`)
-pip install agentsmcp
-
-# MCP adapter for Claude Desktop / Cursor / Continue / ...
-npm install -g agentsmcp-adapter
-
-# LangGraph checkpointer (drop-in BaseCheckpointSaver)
-npm install agentsmcp-langgraph
-```
-
-## Quick start
-
-### 1. Start the server
-
-```bash
-npx agentsmcp-server
-# or, from a clone:
-npm run start
-```
-
-Defaults: `http://localhost:3000`, SQLite at `./agentmailbox.db`.
-Override with `PORT` and `AGENTSMCP_DB` env vars.
-
-### 2. Send a message
-
-```ts
-import { AgentMailbox } from "agentsmcp";
-
-const researcher = new AgentMailbox({
-  agentId: "researcher@demo",
-  server: "http://localhost:3000",
-});
-await researcher.connect();
-
-const { threadId } = await researcher.send(
-  "writer@demo",
-  { task: "summarize diffusion models", papers: ["paper1", "paper2"] },
-  { contextSnapshot: { step: "research_complete", paperCount: 2 } }
-);
-```
-
-### 3. Receive — even after a restart
-
-```ts
-const writer = new AgentMailbox({
-  agentId: "writer@demo",
-  server: "http://localhost:3000",
-});
-await writer.connect();
-
-const { messages, context } = await writer.receive();
-// context.snapshot                  → researcher's state at send time
-// context.threadSummaryStructured   → structured summary of older messages
-// context.recentMessages            → last 10 verbatim
-```
-
-The Python SDK mirrors the same surface:
-
-```python
-from agentmailbox import AgentMailbox
-
-async with AgentMailbox("writer@demo", server="http://localhost:3000") as writer:
-    await writer.connect()
-    result = await writer.receive()
-    snapshot = result.context.snapshot
-    summary = result.context.thread_summary_structured  # None until threshold crossed
-```
-
-## The headline demo
-
-[`examples/research-bench/`](./examples/research-bench/README.md) —
-a multi-agent research thread you can join from Claude Desktop. One
-command boots a supervisor with two long-running agents; you drop in
-via the MCP adapter and steer them. Kill any process and the system
-keeps working.
-
-It demonstrates, in one runnable artifact, the four things AgentMailbox
-gives you that no other agent library does in a single page:
-
-1. Cross-tool visibility — Claude Desktop reads agent threads via MCP.
-2. Cross-tool steering — you are a peer participant, not just an
-   observer.
-3. Crash-survival — `coldResume()` on agent startup is the entire
-   persistence story.
-4. Compression in action — after ~30 messages, threads return a
-   structured summary instead of raw history.
-
-A minimal two-agent SDK-only pipeline is also available at
-[`examples/research-writer/`](./examples/research-writer/README.md).
+- **A2A v1.0 discoverable.** Every deploy ships a public Agent Card at
+  `/.well-known/agent-card.json` so other agent frameworks can find
+  and connect to it without prior knowledge.
 
 ## Multi-agent threads
 
@@ -228,89 +344,35 @@ app.listen(3000);
 
 `ClaudeCompressor` calls Claude Haiku and extracts `{ text, decisions,
 openQuestions, artifacts, coversMessageIds, generatedAt }`. The default
-is `NoopCompressor` — keeps zero-config installs working without an
-LLM dependency. The interface is provider-agnostic; additional
-compressors (OpenAI, local models) can be added by implementing
+is `NoopCompressor` — keeps zero-config installs working without an LLM
+dependency. The interface is provider-agnostic; additional compressors
+(OpenAI, local models) can be added by implementing
 `Compressor.compress()`.
 
 `@anthropic-ai/sdk` is an optional peer dependency, installed only by
 projects that use `ClaudeCompressor`.
 
-## MCP adapter
+## The headline demo
 
-`agentsmcp-adapter` exposes the protocol to any MCP-aware client. Each
-adapter instance represents one agent identity.
+[`examples/research-bench/`](./examples/research-bench/README.md) — a
+multi-agent research thread you can join from Claude Desktop. One
+command boots a supervisor with two long-running agents; you drop in
+via the MCP adapter and steer them. Kill any process and the system
+keeps working.
 
-```json
-{
-  "mcpServers": {
-    "agentsmcp": {
-      "command": "npx",
-      "args": ["-y", "agentsmcp-adapter"],
-      "env": {
-        "AGENTSMCP_AGENT_ID": "claude@local",
-        "AGENTSMCP_SERVER": "http://localhost:3000"
-      }
-    }
-  }
-}
-```
+It demonstrates, in one runnable artifact, the four things AgentMailbox
+gives you that no other agent library does in a single page:
 
-Eight tools and two read-only resources are exposed. See
-[`mcp/README.md`](./mcp/README.md) for the full reference.
+1. Cross-tool visibility — Claude Desktop reads agent threads via MCP.
+2. Cross-tool steering — you are a peer participant, not just an
+   observer.
+3. Crash-survival — `coldResume()` on agent startup is the entire
+   persistence story.
+4. Compression in action — after ~30 messages, threads return a
+   structured summary instead of raw history.
 
-## AI platform skills
-
-AgentMailbox ships as a native skill for every major AI coding platform.
-Install once, and your AI agent automatically checks for context at session
-start, preserves context at session end, and syncs across tools.
-
-| Platform | Install | Details |
-|:---------|:--------|:--------|
-| **Antigravity / Gemini CLI** | `npx skills add RagavRida/agentsmcp@antigravity` | [`skills/antigravity/`](./skills/antigravity/) |
-| **Cursor** | Copy `skills/cursor/rules/` to `.cursor/rules/` | [`skills/cursor/`](./skills/cursor/) |
-| **Claude Code** | Add MCP config to settings | [`skills/claude-code/`](./skills/claude-code/) |
-| **Claude Desktop** | Add MCP config (see [MCP adapter](#mcp-adapter)) | Already works via `agentsmcp-adapter` |
-| **Continue** | Add MCP config to Continue settings | Same adapter, different config path |
-
-**Your context follows you, not the tool.** Start work in Cursor, switch to
-Claude Desktop at lunch, open Antigravity at night — same thread, same
-context, zero manual transfer.
-
-See [`skills/README.md`](./skills/README.md) for details on all skills.
-
-## HTTP API
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/agents/register` | Register an agent, create its mailbox |
-| POST | `/messages/send` | Send a message; supports `cc`, `bcc`, `replyTo` |
-| POST | `/messages/reply-all` | Reply to every visible participant |
-| GET | `/mailbox/:agentId` | All threads for an agent (bcc stripped) |
-| GET | `/mailbox/:agentId/unread` | Unread messages as full context frames |
-| POST | `/mailbox/:agentId/read` | Mark a thread read |
-| GET | `/threads/:threadId` | Full thread with messages |
-| GET | `/threads/:threadId/sync` | Assembled context (snapshot + summary + recent 10) |
-| GET | `/threads/:threadId/participants` | Visible participants with roles |
-
-## Authentication
-
-Set `AGENTSMCP_API_KEY` on the server and pass `apiKey` to every
-SDK constructor. With the env var unset the server is open; with it
-set, every route except `/health` requires
-`Authorization: Bearer <key>` and returns 401 otherwise.
-
-```bash
-AGENTSMCP_API_KEY=s3cret npx agentsmcp-server
-```
-
-```ts
-new AgentMailbox({ agentId: "x@demo", server: "...", apiKey: "s3cret" });
-```
-
-```python
-AgentMailbox("x@demo", server="...", api_key="s3cret")
-```
+A minimal two-agent SDK-only pipeline is also available at
+[`examples/research-writer/`](./examples/research-writer/README.md).
 
 ## How it works
 
@@ -326,9 +388,31 @@ local memory. On `receive()` or `sync()`, the server returns:
 - `recentMessages` — last 10 messages verbatim
 - `tokenCount` — rough estimate of the combined payload size
 
-Storage is pluggable: ship-default SQLite, with the
-`Storage` interface ready for Postgres and Redis adapters. Compression
-is pluggable through the `Compressor` interface.
+Storage is pluggable: SQLite by default, Postgres for production
+deployments, with the `Storage` interface ready for additional adapters
+(Redis, DynamoDB). Compression is pluggable through the `Compressor`
+interface. Multi-tenant scoping is opt-in via `CLOUD_MODE=true` — when
+unset, the server runs in single-key / open mode identical to v0.1.
+
+## AI platform skills
+
+Beyond MCP, AgentMailbox ships as a native skill for every major AI
+coding platform. The skill teaches your AI agent to check for context
+at session start, preserve it at session end, and sync across tools.
+
+| Platform | Install | Details |
+|:---|:---|:---|
+| **Antigravity / Gemini CLI** | `npx skills add RagavRida/agentsmcp@antigravity` | [`skills/antigravity/`](./skills/antigravity/) |
+| **Cursor** | Copy `skills/cursor/rules/` to `.cursor/rules/` | [`skills/cursor/`](./skills/cursor/) |
+| **Claude Code** | Add MCP config to settings | [`skills/claude-code/`](./skills/claude-code/) |
+| **Claude Desktop** | Add MCP config (see [Claude Desktop](#claude-desktop)) | Already works via `agentsmcp-adapter` |
+| **Continue** | Add MCP config to Continue settings | Same adapter, different config path |
+
+**Your context follows you, not the tool.** Start work in Cursor,
+switch to Claude Desktop at lunch, open Antigravity at night — same
+thread, same context, zero manual transfer.
+
+See [`skills/README.md`](./skills/README.md) for details on all skills.
 
 ## Development
 
@@ -355,13 +439,13 @@ deliberately stable, but there is a lot of useful work still to do.
 - Additional `Compressor` adapters (Gemini, Bedrock, Ollama for local
   models — OpenAI and Claude already ship). The interface is small —
   ~80 lines per adapter.
-- A live smoke test for `ClaudeCompressor`. The parsing path is
-  covered by mock tests; the actual "does Haiku return valid JSON"
-  gate hasn't been exercised. `scripts/smoke-openai-compressor.ts`
-  is the template — same shape, swap the import.
-- Additional `Storage` adapters (Postgres, Redis). The `Storage`
-  interface is async-first and provider-agnostic; SQLite is the
-  reference implementation.
+- A live smoke test for `ClaudeCompressor`. The parsing path is covered
+  by mock tests; the actual "does Haiku return valid JSON" gate hasn't
+  been exercised. `scripts/smoke-openai-compressor.ts` is the template
+  — same shape, swap the import.
+- Additional `Storage` adapters (Redis, DynamoDB). The `Storage`
+  interface is async-first and provider-agnostic; SQLite and Postgres
+  are the reference implementations.
 - Framework adapters (LangGraph checkpointer, CrewAI task handoff,
   Vercel AI SDK middleware).
 - Real-world demos beyond `examples/research-bench`. Multi-day
