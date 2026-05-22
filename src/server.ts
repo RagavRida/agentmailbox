@@ -30,6 +30,9 @@ import {
   getPlanLimits,
   PgPoolLike,
   AuthError,
+  findOrCreateGitHubUser,
+  signSession,
+  verifySession,
 } from "./cloud/auth";
 import { PostgresStorage } from "./storage/postgres";
 import {
@@ -460,6 +463,271 @@ export function createServer(
       }
     });
 
+    // ---------- GitHub OAuth (also pre-auth: no Bearer required) ----------
+    const githubClientId = process.env.GITHUB_CLIENT_ID;
+    const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
+    const githubCallbackUrl =
+      process.env.GITHUB_CALLBACK_URL ??
+      "https://hdnxa5c8yr.us-east-1.awsapprunner.com/auth/github/callback";
+    const frontendUrl =
+      process.env.FRONTEND_URL ?? "https://agentmailbox.vercel.app";
+    const sessionSecret = process.env.SESSION_SECRET;
+    const githubReady =
+      Boolean(githubClientId) &&
+      Boolean(githubClientSecret) &&
+      Boolean(sessionSecret);
+
+    if (!githubReady) {
+      console.warn(
+        "[agentsmcp] GitHub OAuth env vars missing; /auth/github routes will 503"
+      );
+    }
+
+    // GET /auth/github — kick off OAuth. State cookie defends against CSRF
+    // on the callback (verified inside /auth/github/callback below).
+    app.get("/auth/github", (_req: Request, res: Response) => {
+      if (!githubReady) {
+        return res.status(503).json({ error: "github_oauth_not_configured" });
+      }
+      const state = require("crypto").randomBytes(24).toString("hex");
+      // 10-minute httpOnly cookie. Browsers only send it back to our same
+      // host on the callback, so it's a reliable CSRF defence even though
+      // we're cross-site from the frontend's perspective.
+      res.cookie?.("ghoauth_state", state, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        maxAge: 10 * 60 * 1000,
+        path: "/auth/github",
+      });
+      // Express doesn't have res.cookie unless cookie-parser / setHeader is
+      // used. Fallback to manual Set-Header for compatibility.
+      res.setHeader(
+        "Set-Cookie",
+        `ghoauth_state=${state}; Max-Age=600; Path=/auth/github; HttpOnly; Secure; SameSite=Lax`
+      );
+
+      const params = new URLSearchParams({
+        client_id: githubClientId!,
+        redirect_uri: githubCallbackUrl,
+        scope: "read:user user:email",
+        state,
+        allow_signup: "true",
+      });
+      return res.redirect(
+        `https://github.com/login/oauth/authorize?${params.toString()}`
+      );
+    });
+
+    // GET /auth/github/callback — exchange code for token, look up user,
+    // sign a JWT, redirect to frontend.
+    app.get(
+      "/auth/github/callback",
+      async (req: Request, res: Response, next: NextFunction) => {
+        if (!githubReady) {
+          return res.status(503).json({ error: "github_oauth_not_configured" });
+        }
+        try {
+          const { code, state, error } = req.query as {
+            code?: string;
+            state?: string;
+            error?: string;
+          };
+          if (error) {
+            return res.redirect(`${frontendUrl}/?auth_error=${encodeURIComponent(error)}`);
+          }
+          if (!code) {
+            return res.redirect(`${frontendUrl}/?auth_error=missing_code`);
+          }
+
+          // CSRF check: state cookie must match the state echoed back by GitHub.
+          const cookieHeader = req.headers.cookie ?? "";
+          const stateCookie = cookieHeader
+            .split(";")
+            .map((c) => c.trim())
+            .find((c) => c.startsWith("ghoauth_state="))
+            ?.slice("ghoauth_state=".length);
+          if (!stateCookie || !state || stateCookie !== state) {
+            return res.redirect(`${frontendUrl}/?auth_error=state_mismatch`);
+          }
+
+          // Exchange code → access_token.
+          const tokenRes = await fetch(
+            "https://github.com/login/oauth/access_token",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "User-Agent": "agentsmcp",
+              },
+              body: JSON.stringify({
+                client_id: githubClientId,
+                client_secret: githubClientSecret,
+                code,
+                redirect_uri: githubCallbackUrl,
+              }),
+            }
+          );
+          const tokenJson = (await tokenRes.json()) as {
+            access_token?: string;
+            error?: string;
+          };
+          if (!tokenJson.access_token) {
+            return res.redirect(
+              `${frontendUrl}/?auth_error=${encodeURIComponent(tokenJson.error ?? "token_exchange_failed")}`
+            );
+          }
+          const accessToken = tokenJson.access_token;
+
+          // Fetch profile + email in parallel.
+          const ghHeaders = {
+            Authorization: `Bearer ${accessToken}`,
+            "User-Agent": "agentsmcp",
+            Accept: "application/vnd.github+json",
+          };
+          const [userRes, emailsRes] = await Promise.all([
+            fetch("https://api.github.com/user", { headers: ghHeaders }),
+            fetch("https://api.github.com/user/emails", { headers: ghHeaders }),
+          ]);
+          if (!userRes.ok) {
+            return res.redirect(`${frontendUrl}/?auth_error=gh_user_fetch_failed`);
+          }
+          const ghUser = (await userRes.json()) as {
+            id: number;
+            login: string;
+            name?: string;
+            email?: string;
+            avatar_url?: string;
+          };
+          let primaryEmail: string | undefined;
+          if (emailsRes.ok) {
+            const emails = (await emailsRes.json()) as Array<{
+              email: string;
+              primary: boolean;
+              verified: boolean;
+            }>;
+            primaryEmail =
+              emails.find((e) => e.primary && e.verified)?.email ??
+              emails.find((e) => e.primary)?.email;
+          }
+          primaryEmail = primaryEmail ?? ghUser.email ?? undefined;
+          if (!primaryEmail) {
+            return res.redirect(
+              `${frontendUrl}/?auth_error=no_verified_email`
+            );
+          }
+
+          const { userId, apiKey, isNew } = await findOrCreateGitHubUser(
+            cloudPool!,
+            {
+              githubId: ghUser.id,
+              githubLogin: ghUser.login,
+              email: primaryEmail,
+              name: ghUser.name ?? null,
+              avatarUrl: ghUser.avatar_url ?? null,
+            }
+          );
+
+          const token = signSession({ userId, githubLogin: ghUser.login }, sessionSecret!);
+
+          // Clear the state cookie now that we've validated it.
+          res.setHeader(
+            "Set-Cookie",
+            "ghoauth_state=; Max-Age=0; Path=/auth/github; HttpOnly; Secure; SameSite=Lax"
+          );
+
+          const dashboardParams = new URLSearchParams({ token });
+          // Only surface the freshly-minted API key on first-time signup so
+          // the dashboard can show the one-time copy banner. Returning users
+          // see their key list via /auth/keys after sign-in.
+          if (isNew && apiKey) dashboardParams.set("apiKey", apiKey);
+          return res.redirect(
+            `${frontendUrl}/dashboard?${dashboardParams.toString()}`
+          );
+        } catch (e) {
+          next(e);
+        }
+      }
+    );
+
+    // GET /auth/session — validate a JWT, return user profile + keys + usage.
+    // Authenticated by JWT (NOT a sk_live_ key) so it can't be confused with
+    // the API-key auth used everywhere else.
+    app.get("/auth/session", async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!sessionSecret) {
+          return res.status(503).json({ error: "session_not_configured" });
+        }
+        const header = req.header("authorization") ?? "";
+        if (!header.startsWith("Bearer ")) {
+          return res.status(401).json({ error: "session_required" });
+        }
+        const token = header.slice("Bearer ".length).trim();
+        const payload = verifySession(token, sessionSecret);
+        if (!payload) {
+          return res.status(401).json({ error: "session_expired" });
+        }
+
+        const user = await getUser(cloudPool!, payload.userId);
+        if (!user) return res.status(404).json({ error: "user_not_found" });
+
+        const limits = await getPlanLimits(cloudPool!, user.plan);
+        const keys = await listKeys(cloudPool!, payload.userId);
+
+        const counts = await cloudPool!.query<{
+          agents: string;
+          threads: string;
+          msgs_today: string | null;
+          github_login: string | null;
+          avatar_url: string | null;
+        }>(
+          `SELECT
+             (SELECT COUNT(*)::text FROM agents  WHERE user_id = $1) AS agents,
+             (SELECT COUNT(*)::text FROM threads WHERE user_id = $1) AS threads,
+             (SELECT count::text FROM usage_metrics
+                WHERE user_id = $1
+                  AND metric = 'messages_sent'
+                  AND period_start = CURRENT_DATE) AS msgs_today,
+             (SELECT github_login FROM users WHERE id = $1) AS github_login,
+             (SELECT avatar_url   FROM users WHERE id = $1) AS avatar_url`,
+          [payload.userId]
+        );
+        const row = counts.rows[0] ?? {
+          agents: "0",
+          threads: "0",
+          msgs_today: null,
+          github_login: null,
+          avatar_url: null,
+        };
+
+        return res.status(200).json({
+          user: {
+            id: user.userId,
+            email: user.email,
+            name: user.name,
+            plan: user.plan,
+            githubLogin: row.github_login,
+            avatarUrl: row.avatar_url,
+            createdAt: user.createdAt,
+          },
+          keys,
+          usage: {
+            agents: Number(row.agents),
+            maxAgents: limits?.maxAgents ?? null,
+            threads: Number(row.threads),
+            maxThreads: limits?.maxThreads ?? null,
+            messagesToday: Number(row.msgs_today ?? 0),
+            maxMessagesPerDay: limits?.maxMessagesPerDay ?? null,
+          },
+        });
+      } catch (e) {
+        next(e);
+      }
+    });
+
+    // Mount the API-key auth AFTER the OAuth + session routes so those
+    // stay pre-auth.
     app.use(cloudAuth(cloudOpts));
 
     // /auth/me — caller's profile + current usage snapshot.

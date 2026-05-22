@@ -34,6 +34,8 @@ const SKIPPED_PREFIXES = [
   "/health",
   "/.well-known/",
   "/auth/register",
+  "/auth/github",
+  "/auth/session",
   "/usage/",
 ];
 

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import jwt from "jsonwebtoken";
 
 // `pg` is in `dependencies` so it's always present at runtime, but we keep
 // the import structural — same pattern as src/storage/postgres.ts — so the
@@ -342,4 +343,134 @@ function isValidEmail(s: string): boolean {
   if (!s || /\s/.test(s)) return false;
   const at = s.indexOf("@");
   return at > 0 && at < s.length - 1 && s.lastIndexOf("@") === at;
+}
+
+// ============================================================================
+// GitHub OAuth + JWT session
+// ============================================================================
+
+export interface GitHubProfile {
+  githubId: number;
+  githubLogin: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+export interface FindOrCreateResult {
+  userId: string;
+  apiKey?: string;
+  isNew: boolean;
+}
+
+/**
+ * Resolve a GitHub OAuth user to one of ours, creating a new account on
+ * first login. The match order is intentional:
+ *
+ *   1. By github_id   — stable across GitHub username renames.
+ *   2. By email       — links a pre-existing email-signup account to GitHub.
+ *   3. New row        — registers the user and mints their default API key.
+ *
+ * Only step 3 returns `apiKey` (in plaintext, exactly once). Existing users
+ * coming back through GitHub don't get a fresh key — they manage keys from
+ * the dashboard via `/auth/keys`.
+ */
+export async function findOrCreateGitHubUser(
+  pool: PgPoolLike,
+  profile: GitHubProfile
+): Promise<FindOrCreateResult> {
+  // 1. Lookup by github_id.
+  const byGh = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE github_id = $1 LIMIT 1`,
+    [profile.githubId]
+  );
+  if (byGh.rows.length > 0) {
+    // Refresh the cached login + avatar in case they changed on GitHub.
+    await pool.query(
+      `UPDATE users
+         SET github_login = $2,
+             avatar_url   = $3,
+             updated_at   = NOW()
+       WHERE id = $1`,
+      [byGh.rows[0].id, profile.githubLogin, profile.avatarUrl]
+    );
+    return { userId: byGh.rows[0].id, isNew: false };
+  }
+
+  // 2. Lookup by email — links an email-only account to GitHub.
+  const byEmail = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+    [profile.email.toLowerCase()]
+  );
+  if (byEmail.rows.length > 0) {
+    await pool.query(
+      `UPDATE users
+         SET github_id    = $2,
+             github_login = $3,
+             avatar_url   = $4,
+             updated_at   = NOW()
+       WHERE id = $1`,
+      [
+        byEmail.rows[0].id,
+        profile.githubId,
+        profile.githubLogin,
+        profile.avatarUrl,
+      ]
+    );
+    return { userId: byEmail.rows[0].id, isNew: false };
+  }
+
+  // 3. New user.
+  const created = await pool.query<{ id: string }>(
+    `INSERT INTO users (email, name, plan, github_id, github_login, avatar_url)
+     VALUES ($1, $2, 'free', $3, $4, $5)
+     RETURNING id`,
+    [
+      profile.email.toLowerCase(),
+      profile.name,
+      profile.githubId,
+      profile.githubLogin,
+      profile.avatarUrl,
+    ]
+  );
+  const userId = created.rows[0].id;
+
+  const { key, hash, prefix } = generateApiKey();
+  await pool.query(
+    `INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+     VALUES ($1, $2, $3, 'default')`,
+    [userId, hash, prefix]
+  );
+  return { userId, apiKey: key, isNew: true };
+}
+
+export interface SessionPayload {
+  userId: string;
+  githubLogin?: string;
+}
+
+/**
+ * Mint a 7-day JWT session token. Used for the dashboard only — NOT for
+ * API access (that's `sk_live_*` keys). The two are intentionally separate
+ * trust boundaries: a leaked session lets someone use the dashboard until
+ * the JWT expires; a leaked API key gives full agent/message access until
+ * it's revoked.
+ */
+export function signSession(payload: SessionPayload, secret: string): string {
+  return jwt.sign(payload, secret, { expiresIn: "7d" });
+}
+
+export function verifySession(
+  token: string,
+  secret: string
+): SessionPayload | null {
+  try {
+    const decoded = jwt.verify(token, secret) as SessionPayload & {
+      iat?: number;
+      exp?: number;
+    };
+    return { userId: decoded.userId, githubLogin: decoded.githubLogin };
+  } catch {
+    return null;
+  }
 }
