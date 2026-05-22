@@ -49,9 +49,15 @@ const DEFAULT_CLOUD_RATE_LIMITS: RateLimitConfig = {
 };
 
 const DEFAULT_CLOUD_CORS_ORIGINS = [
+  // Live marketing site + legacy alias
+  "https://agentmailbox.vercel.app",
+  "https://freqooo.vercel.app",
+  // Dev origin
+  "http://localhost:5173",
+  // Legacy .com placeholders kept for backward compatibility with any
+  // references that pre-date the .vercel.app rename.
   "https://dashboard.agentsmcp.com",
   "https://agentsmcp.com",
-  "http://localhost:5173",
 ];
 
 let cachedPackageVersion: string | null = null;
