@@ -183,6 +183,16 @@ export class PostgresStorage implements Storage {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+
+      // Migration 003: GitHub OAuth fields on users
+      await client.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS github_id BIGINT UNIQUE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS github_login TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+        CREATE INDEX IF NOT EXISTS idx_users_github_id
+          ON users(github_id) WHERE github_id IS NOT NULL;
+      `);
+
       await client.query("COMMIT");
     } catch (e) {
       await client.query("ROLLBACK").catch(() => undefined);
