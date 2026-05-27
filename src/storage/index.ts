@@ -2,7 +2,15 @@ import { SqliteStorage } from "./sqlite";
 import { PostgresStorage } from "./postgres";
 import { Storage, StorageOptions } from "./interface";
 
-export type { Storage, StorageOptions } from "./interface";
+export type {
+  Storage,
+  StorageOptions,
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+} from "./interface";
 export { SqliteStorage } from "./sqlite";
 export { PostgresStorage, type PostgresStorageOptions } from "./postgres";
 

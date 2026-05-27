@@ -34,6 +34,7 @@ import {
   signSession,
   verifySession,
 } from "./cloud/auth";
+import { recordAudit, getAuditTrail } from "./cloud/audit";
 import { PostgresStorage } from "./storage/postgres";
 import {
   AgentAddress,
@@ -315,6 +316,7 @@ export function createServer(
       .match(/^(1|true|yes|on)$/) !== null);
 
   const app = express();
+  let cloudPool: PgPoolLike | null = null;
 
   if (cloudMode) {
     // App Runner / any HTTPS-fronted load balancer forwards client IP via
@@ -330,6 +332,30 @@ export function createServer(
   }
 
   app.use(express.json({ limit: "10mb" }));
+
+  // Structured JSON logger middleware.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      const log = {
+        timestamp: new Date().toISOString(),
+        type: "request",
+        method: req.method,
+        path: req.path,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"] ?? null,
+        status: res.statusCode,
+        durationMs: duration,
+        userId: req.userId ?? null,
+        apiKeyId: req.apiKeyId ?? null,
+      };
+      if (cloudMode) {
+        console.log(JSON.stringify(log));
+      }
+    });
+    next();
+  });
 
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ ok: true });
@@ -437,11 +463,10 @@ export function createServer(
       }
       return resolvedPool;
     };
-    const cloudPool: PgPoolLike = {
+    cloudPool = {
       query: async (text, params) => (await getPool()).query(text, params),
       connect: async () => (await getPool()).connect(),
     };
-    const cloudOpts = { pool: cloudPool };
 
     // /auth/register is intentionally registered BEFORE cloudAuth so signup
     // doesn't require a key. cloudAuth's skip-list also includes it as
@@ -631,6 +656,17 @@ export function createServer(
 
           const token = signSession({ userId, githubLogin: ghUser.login }, sessionSecret!);
 
+          // Record auth login event
+          recordAudit(cloudPool!, {
+            userId,
+            action: "auth.login",
+            resourceType: "user",
+            resourceId: userId,
+            metadata: { method: "github", isNew },
+            ipAddress: req.ip,
+            userAgent: req.headers["user-agent"] ?? null,
+          });
+
           // Clear the state cookie now that we've validated it.
           res.setHeader(
             "Set-Cookie",
@@ -726,8 +762,33 @@ export function createServer(
       }
     });
 
+    // GET /auth/audit — fetch audit trail logs for the logged-in user.
+    app.get("/auth/audit", async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!sessionSecret) {
+          return res.status(503).json({ error: "session_not_configured" });
+        }
+        const header = req.header("authorization") ?? "";
+        if (!header.startsWith("Bearer ")) {
+          return res.status(401).json({ error: "session_required" });
+        }
+        const token = header.slice("Bearer ".length).trim();
+        const payload = verifySession(token, sessionSecret);
+        if (!payload) {
+          return res.status(401).json({ error: "session_expired" });
+        }
+
+        const limit = Number(req.query.limit ?? 100);
+        const logs = await getAuditTrail(cloudPool!, payload.userId, limit);
+        return res.status(200).json({ logs });
+      } catch (e) {
+        next(e);
+      }
+    });
+
     // Mount the API-key auth AFTER the OAuth + session routes so those
     // stay pre-auth.
+    const cloudOpts = { pool: cloudPool, sessionSecret };
     app.use(cloudAuth(cloudOpts));
 
     // /auth/me — caller's profile + current usage snapshot.
@@ -800,6 +861,15 @@ export function createServer(
           });
         }
         const created = await createAdditionalKey(cloudPool!, req.userId, name || "default");
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          action: "key.create",
+          resourceType: "api_key",
+          resourceId: created.keyId,
+          metadata: { name: created.name },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
         return res.status(201).json(created);
       } catch (e) {
         next(e);
@@ -818,6 +888,15 @@ export function createServer(
         const currentKeyId = req.apiKeyId ?? "__session__";
         const ok = await revokeKey(cloudPool!, req.params.keyId, req.userId, currentKeyId);
         if (!ok) return res.status(404).json({ error: "key_not_found" });
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          action: "key.revoke",
+          resourceType: "api_key",
+          resourceId: req.params.keyId,
+          metadata: { currentKeyId },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
         return res.status(200).json({ ok: true });
       } catch (e) {
         if (e instanceof AuthError) {
@@ -861,6 +940,18 @@ export function createServer(
       const s = storageFor(req);
       const existing = await s.getAgent(parsed.data.agentId);
       const agent = await s.registerAgent(parsed.data.agentId);
+      if (req.userId) {
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          agentId: agent.id,
+          action: "agent.register",
+          resourceType: "agent",
+          resourceId: agent.id,
+          metadata: { created: !existing },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      }
       return res.status(201).json({
         agentId: agent.id,
         created: !existing,
@@ -887,6 +978,7 @@ export function createServer(
       for (const a of bcc ?? []) await s.registerAgent(a);
 
       let thread: Thread | null = null;
+      let threadCreated = false;
       if (threadId) {
         thread = await s.getThread(threadId);
         if (!thread) {
@@ -895,7 +987,10 @@ export function createServer(
       } else {
         const visibleSet = [from, to, ...(cc ?? [])];
         thread = await s.getThreadByParticipantSet(visibleSet);
-        if (!thread) thread = await s.createThread(visibleSet, bcc ?? []);
+        if (!thread) {
+          thread = await s.createThread(visibleSet, bcc ?? []);
+          threadCreated = true;
+        }
       }
 
       const message: Message = {
@@ -912,6 +1007,31 @@ export function createServer(
       if (replyTo) message.replyTo = replyTo;
 
       await s.appendMessage(thread.id, message);
+
+      if (req.userId) {
+        if (threadCreated) {
+          recordAudit(cloudPool!, {
+            userId: req.userId,
+            agentId: from,
+            action: "thread.create",
+            resourceType: "thread",
+            resourceId: thread.id,
+            metadata: { participants: [from, to, ...(cc ?? [])] },
+            ipAddress: req.ip,
+            userAgent: req.headers["user-agent"] ?? null,
+          });
+        }
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          agentId: from,
+          action: "message.send",
+          resourceType: "message",
+          resourceId: message.id,
+          metadata: { threadId: thread.id, from, to, ccSize: cc?.length ?? 0, bccSize: bcc?.length ?? 0 },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      }
 
       // Cloud-tier usage counter. Best-effort; failure here must not undo
       // the message that already landed.
@@ -971,6 +1091,19 @@ export function createServer(
       if (rest.length > 0) message.cc = rest;
 
       await s.appendMessage(threadId, message);
+
+      if (req.userId) {
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          agentId: from,
+          action: "message.send",
+          resourceType: "message",
+          resourceId: message.id,
+          metadata: { threadId, from, to: primary, ccSize: rest.length, type: "reply_all" },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      }
 
       if (req.userId && storage instanceof PostgresStorage) {
         const pool = await storage.getRawPool();
@@ -1041,6 +1174,18 @@ export function createServer(
           return stripBccFromFrame(frame, agentId);
         })
       );
+      if (req.userId && frames.length > 0) {
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          agentId,
+          action: "message.receive",
+          resourceType: "agent",
+          resourceId: agentId,
+          metadata: { count: frames.length },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      }
       return res.status(200).json({ messages: frames });
     } catch (e) {
       next(e);
@@ -1056,6 +1201,18 @@ export function createServer(
         return res.status(400).json({ error: parsed.error.flatten() });
       }
       await storageFor(req).markRead(agentId, parsed.data.threadId);
+      if (req.userId) {
+        recordAudit(cloudPool!, {
+          userId: req.userId,
+          agentId,
+          action: "message.read",
+          resourceType: "thread",
+          resourceId: parsed.data.threadId,
+          metadata: { agentId },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      }
       return res.status(200).json({ ok: true });
     } catch (e) {
       next(e);
@@ -1132,6 +1289,126 @@ export function createServer(
       });
 
       return res.status(200).json({ participants: filtered });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ===================== Context Graph =====================
+
+  // POST /mailbox/:agentId/graph/nodes — upsert a graph node
+  app.post("/mailbox/:agentId/graph/nodes", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const { id, type, name, description, metadata } = req.body;
+      if (!id || !type || !name) {
+        return res.status(400).json({ error: "id, type, and name are required" });
+      }
+      await storageFor(req).upsertNode(agentId, {
+        id,
+        type,
+        name,
+        description: description ?? undefined,
+        metadata: metadata ?? {},
+      });
+      return res.status(200).json({ ok: true, nodeId: id });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /mailbox/:agentId/graph/edges — add a graph edge
+  app.post("/mailbox/:agentId/graph/edges", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { sourceId, targetId, type, weight } = req.body;
+      if (!sourceId || !targetId || !type) {
+        return res.status(400).json({ error: "sourceId, targetId, and type are required" });
+      }
+      await storageFor(req).addEdge({
+        sourceId,
+        targetId,
+        type,
+        weight: weight ?? 1.0,
+      });
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /mailbox/:agentId/graph/query?q=... — query graph with 2-hop traversal
+  app.get("/mailbox/:agentId/graph/query", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const q = (req.query.q as string | undefined) ?? "";
+      if (!q) {
+        return res.status(400).json({ error: "q query parameter is required" });
+      }
+      const result = await storageFor(req).queryGraph(agentId, q);
+      return res.status(200).json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ===================== Codebase Index =====================
+
+  // POST /mailbox/:agentId/index — upsert an index entry
+  app.post("/mailbox/:agentId/index", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const { key, category, summary, metadata } = req.body;
+      if (!key || !category || !summary) {
+        return res.status(400).json({ error: "key, category, and summary are required" });
+      }
+      await storageFor(req).upsertIndex(agentId, {
+        key,
+        category,
+        summary,
+        metadata: metadata ?? {},
+      });
+      return res.status(200).json({ ok: true, key });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /mailbox/:agentId/index/:key — get a specific index entry
+  app.get("/mailbox/:agentId/index/:key(*)", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const key = req.params.key;
+      const entry = await storageFor(req).getIndex(agentId, key);
+      if (!entry) return res.status(404).json({ error: "index entry not found" });
+      return res.status(200).json(entry);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /mailbox/:agentId/index?q=...&category=... — search index entries
+  app.get("/mailbox/:agentId/index", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const q = (req.query.q as string | undefined) ?? "";
+      const category = req.query.category as string | undefined;
+      if (!q) {
+        return res.status(400).json({ error: "q query parameter is required" });
+      }
+      const entries = await storageFor(req).searchIndex(agentId, q, category);
+      return res.status(200).json({ entries });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // DELETE /mailbox/:agentId/index/:key — delete an index entry
+  app.delete("/mailbox/:agentId/index/:key(*)", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const agentId = req.params.agentId;
+      const key = req.params.key;
+      await storageFor(req).deleteIndex(agentId, key);
+      return res.status(200).json({ ok: true });
     } catch (e) {
       next(e);
     }

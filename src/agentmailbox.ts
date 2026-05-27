@@ -8,6 +8,11 @@ import {
   Thread,
   ThreadSummary,
 } from "./types";
+import type {
+  CodebaseIndexEntry,
+  GraphEdge,
+  GraphNode,
+} from "./storage/interface";
 
 export interface AgentMailboxConfig {
   agentId: AgentAddress;
@@ -176,7 +181,79 @@ export class AgentMailbox {
       { threadId }
     );
   }
+
+  // ---------- Context Graph ----------
+
+  async upsertNode(
+    node: Omit<GraphNode, "updatedAt">
+  ): Promise<void> {
+    await this.request<{ ok: boolean }>(
+      "POST",
+      `/mailbox/${encodeURIComponent(this.agentId)}/graph/nodes`,
+      node
+    );
+  }
+
+  async addEdge(edge: GraphEdge): Promise<void> {
+    await this.request<{ ok: boolean }>(
+      "POST",
+      `/mailbox/${encodeURIComponent(this.agentId)}/graph/edges`,
+      edge
+    );
+  }
+
+  async queryGraph(
+    query: string
+  ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+    return this.request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
+      "GET",
+      `/mailbox/${encodeURIComponent(this.agentId)}/graph/query?q=${encodeURIComponent(query)}`
+    );
+  }
+
+  // ---------- Codebase Index ----------
+
+  async upsertIndex(
+    entry: Omit<CodebaseIndexEntry, "updatedAt">
+  ): Promise<void> {
+    await this.request<{ ok: boolean }>(
+      "POST",
+      `/mailbox/${encodeURIComponent(this.agentId)}/index`,
+      entry
+    );
+  }
+
+  async getIndex(key: string): Promise<CodebaseIndexEntry | null> {
+    try {
+      return await this.request<CodebaseIndexEntry>(
+        "GET",
+        `/mailbox/${encodeURIComponent(this.agentId)}/index/${encodeURIComponent(key)}`
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async searchIndex(
+    query: string,
+    category?: string
+  ): Promise<CodebaseIndexEntry[]> {
+    let path = `/mailbox/${encodeURIComponent(this.agentId)}/index?q=${encodeURIComponent(query)}`;
+    if (category) path += `&category=${encodeURIComponent(category)}`;
+    const res = await this.request<{ entries: CodebaseIndexEntry[] }>(
+      "GET",
+      path
+    );
+    return res.entries;
+  }
 }
 
 export * from "./types";
 export { assembleContext } from "./context";
+export type {
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+} from "./storage/interface";

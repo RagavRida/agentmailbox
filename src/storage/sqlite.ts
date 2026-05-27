@@ -9,7 +9,12 @@ import {
   Thread,
   ThreadSummary,
 } from "../types";
-import { Storage } from "./interface";
+import {
+  CodebaseIndexEntry,
+  GraphEdge,
+  GraphNode,
+  Storage,
+} from "./interface";
 
 interface MessageRow {
   id: string;
@@ -88,6 +93,42 @@ export class SqliteStorage implements Storage {
         generated_at INTEGER NOT NULL,
         FOREIGN KEY(thread_id) REFERENCES threads(id)
       );
+
+      CREATE TABLE IF NOT EXISTS graph_nodes (
+        id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('message', 'file', 'symbol', 'decision', 'task')),
+        name TEXT NOT NULL,
+        description TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (id, agent_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS graph_edges (
+        source_id TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        weight REAL NOT NULL DEFAULT 1.0,
+        PRIMARY KEY (source_id, target_id, type)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_graph_nodes_agent ON graph_nodes(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source_id);
+      CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target_id);
+
+      CREATE TABLE IF NOT EXISTS codebase_index (
+        key TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        category TEXT NOT NULL CHECK (category IN ('file', 'symbol', 'api', 'config', 'architecture')),
+        summary TEXT NOT NULL,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (key, agent_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_codebase_index_agent ON codebase_index(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_codebase_index_category ON codebase_index(agent_id, category);
     `);
 
     // Idempotent migration for older DBs created before CC/BCC support.
@@ -441,6 +482,267 @@ export class SqliteStorage implements Storage {
            generated_at = excluded.generated_at`
       )
       .run(threadId, JSON.stringify(summary), summary.generatedAt);
+  }
+
+  // ---------- Context Graph ----------
+
+  async upsertNode(
+    agentId: AgentAddress,
+    node: Omit<GraphNode, "updatedAt">
+  ): Promise<void> {
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO graph_nodes (id, agent_id, type, name, description, metadata, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id, agent_id) DO UPDATE SET
+           type = excluded.type,
+           name = excluded.name,
+           description = excluded.description,
+           metadata = excluded.metadata,
+           updated_at = excluded.updated_at`
+      )
+      .run(
+        node.id,
+        agentId,
+        node.type,
+        node.name,
+        node.description ?? null,
+        JSON.stringify(node.metadata ?? {}),
+        now
+      );
+  }
+
+  async deleteNode(agentId: AgentAddress, nodeId: string): Promise<void> {
+    // Delete edges first (no CASCADE in SQLite FK by default on composite keys)
+    this.db
+      .prepare("DELETE FROM graph_edges WHERE source_id = ? OR target_id = ?")
+      .run(nodeId, nodeId);
+    this.db
+      .prepare("DELETE FROM graph_nodes WHERE id = ? AND agent_id = ?")
+      .run(nodeId, agentId);
+  }
+
+  async addEdge(edge: GraphEdge): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO graph_edges (source_id, target_id, type, weight)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(source_id, target_id, type) DO UPDATE SET
+           weight = excluded.weight`
+      )
+      .run(edge.sourceId, edge.targetId, edge.type, edge.weight);
+  }
+
+  async deleteEdge(
+    sourceId: string,
+    targetId: string,
+    type: string
+  ): Promise<void> {
+    this.db
+      .prepare(
+        "DELETE FROM graph_edges WHERE source_id = ? AND target_id = ? AND type = ?"
+      )
+      .run(sourceId, targetId, type);
+  }
+
+  async queryGraph(
+    agentId: AgentAddress,
+    query: string
+  ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+    const pattern = `%${query}%`;
+
+    // Step 1: Find seed nodes matching the query by name or description
+    const seedRows = this.db
+      .prepare(
+        `SELECT id, agent_id, type, name, description, metadata, updated_at
+         FROM graph_nodes
+         WHERE agent_id = ? AND (name LIKE ? OR description LIKE ?)`
+      )
+      .all(agentId, pattern, pattern) as Array<{
+      id: string;
+      agent_id: string;
+      type: string;
+      name: string;
+      description: string | null;
+      metadata: string;
+      updated_at: number;
+    }>;
+
+    if (seedRows.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+
+    const seedIds = seedRows.map((r) => r.id);
+    const placeholders = seedIds.map(() => "?").join(", ");
+
+    // Step 2: 2-hop traversal — collect all node ids reachable within 2 edges
+    const traversalRows = this.db
+      .prepare(
+        `WITH RECURSIVE hops(node_id, depth) AS (
+           SELECT id, 0 FROM graph_nodes WHERE id IN (${placeholders}) AND agent_id = ?
+           UNION
+           SELECT CASE
+             WHEN e.source_id = h.node_id THEN e.target_id
+             ELSE e.source_id
+           END, h.depth + 1
+           FROM hops h
+           JOIN graph_edges e ON (e.source_id = h.node_id OR e.target_id = h.node_id)
+           WHERE h.depth < 2
+         )
+         SELECT DISTINCT node_id FROM hops`
+      )
+      .all(...seedIds, agentId) as Array<{ node_id: string }>;
+
+    const allIds = traversalRows.map((r) => r.node_id);
+    if (allIds.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+
+    const allPlaceholders = allIds.map(() => "?").join(", ");
+
+    // Step 3: Fetch full node objects
+    const nodeRows = this.db
+      .prepare(
+        `SELECT id, agent_id, type, name, description, metadata, updated_at
+         FROM graph_nodes
+         WHERE id IN (${allPlaceholders}) AND agent_id = ?`
+      )
+      .all(...allIds, agentId) as Array<{
+      id: string;
+      agent_id: string;
+      type: string;
+      name: string;
+      description: string | null;
+      metadata: string;
+      updated_at: number;
+    }>;
+
+    const nodes: GraphNode[] = nodeRows.map((r) => ({
+      id: r.id,
+      type: r.type as GraphNode["type"],
+      name: r.name,
+      description: r.description ?? undefined,
+      metadata: JSON.parse(r.metadata) as Record<string, unknown>,
+      updatedAt: r.updated_at,
+    }));
+
+    // Step 4: Fetch edges between all returned nodes
+    const edgeRows = this.db
+      .prepare(
+        `SELECT source_id, target_id, type, weight
+         FROM graph_edges
+         WHERE source_id IN (${allPlaceholders})
+           AND target_id IN (${allPlaceholders})`
+      )
+      .all(...allIds, ...allIds) as Array<{
+      source_id: string;
+      target_id: string;
+      type: string;
+      weight: number;
+    }>;
+
+    const edges: GraphEdge[] = edgeRows.map((r) => ({
+      sourceId: r.source_id,
+      targetId: r.target_id,
+      type: r.type,
+      weight: r.weight,
+    }));
+
+    return { nodes, edges };
+  }
+
+  // ---------- Codebase Index ----------
+
+  async upsertIndex(
+    agentId: AgentAddress,
+    entry: Omit<CodebaseIndexEntry, "updatedAt">
+  ): Promise<void> {
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO codebase_index (key, agent_id, category, summary, metadata, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(key, agent_id) DO UPDATE SET
+           category = excluded.category,
+           summary = excluded.summary,
+           metadata = excluded.metadata,
+           updated_at = excluded.updated_at`
+      )
+      .run(
+        entry.key,
+        agentId,
+        entry.category,
+        entry.summary,
+        JSON.stringify(entry.metadata ?? {}),
+        now
+      );
+  }
+
+  async getIndex(
+    agentId: AgentAddress,
+    key: string
+  ): Promise<CodebaseIndexEntry | null> {
+    const row = this.db
+      .prepare(
+        `SELECT key, category, summary, metadata, updated_at
+         FROM codebase_index WHERE key = ? AND agent_id = ?`
+      )
+      .get(key, agentId) as
+      | {
+          key: string;
+          category: string;
+          summary: string;
+          metadata: string;
+          updated_at: number;
+        }
+      | undefined;
+    if (!row) return null;
+    return {
+      key: row.key,
+      category: row.category as CodebaseIndexEntry["category"],
+      summary: row.summary,
+      metadata: JSON.parse(row.metadata) as Record<string, unknown>,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async searchIndex(
+    agentId: AgentAddress,
+    query: string,
+    category?: string
+  ): Promise<CodebaseIndexEntry[]> {
+    const pattern = `%${query}%`;
+    let sql = `SELECT key, category, summary, metadata, updated_at
+               FROM codebase_index
+               WHERE agent_id = ? AND (key LIKE ? OR summary LIKE ?)`;
+    const params: unknown[] = [agentId, pattern, pattern];
+    if (category) {
+      sql += " AND category = ?";
+      params.push(category);
+    }
+    sql += " ORDER BY updated_at DESC LIMIT 50";
+
+    const rows = this.db.prepare(sql).all(...params) as Array<{
+      key: string;
+      category: string;
+      summary: string;
+      metadata: string;
+      updated_at: number;
+    }>;
+    return rows.map((r) => ({
+      key: r.key,
+      category: r.category as CodebaseIndexEntry["category"],
+      summary: r.summary,
+      metadata: JSON.parse(r.metadata) as Record<string, unknown>,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  async deleteIndex(agentId: AgentAddress, key: string): Promise<void> {
+    this.db
+      .prepare("DELETE FROM codebase_index WHERE key = ? AND agent_id = ?")
+      .run(key, agentId);
   }
 
   async close(): Promise<void> {

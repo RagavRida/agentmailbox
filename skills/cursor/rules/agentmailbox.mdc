@@ -9,6 +9,17 @@ alwaysApply: true
 You have access to AgentMailbox via MCP tools. Use these tools to maintain
 persistent context across sessions and coordinate with other agents.
 
+## RULE #1: Memory First — ALWAYS
+
+When a user gives you ANY query or task:
+
+1. **IMMEDIATELY** call `agentsmcp_context_briefing` with the user's query as the `task` parameter
+2. Read the returned briefing — it contains relevant files, symbols, decisions, tasks, and relationships from the persistent memory
+3. If the briefing returns results, USE THEM as your starting context instead of reading raw files
+4. Only fall back to `grep` / `view_file` / `read_file` when the briefing returns empty results for what you need
+
+This single rule eliminates 95% of wasted input tokens.
+
 ## On Session Start
 
 Always check for unread messages at the beginning of a session:
@@ -17,13 +28,51 @@ Always check for unread messages at the beginning of a session:
 2. If messages exist, summarize the context for the user
 3. If a relevant thread exists, call `agentsmcp_sync` with the threadId
 
-## During Work
+## Context Lookup Priority (use in order)
+
+When you need information about the codebase:
+
+1. `agentsmcp_context_briefing` — one-shot task briefing (graph + index combined)
+2. `agentsmcp_get_index` — look up a specific file/symbol by key (200 tokens vs reading full file)
+3. `agentsmcp_search_index` — keyword search across all indexed entries (replaces grep)
+4. `agentsmcp_query_graph` — relationship traversal (find connected files/symbols/decisions)
+5. **LAST RESORT**: `grep` / `view_file` — only when memory has no entry
+
+## During Work — Record Progress
 
 When the user makes important decisions or completes significant tasks:
 
 1. Call `agentsmcp_send` to record the decision/progress to the thread
 2. Include structured data: `decisions`, `filesChanged`, `status`, `openQuestions`
 3. Include a `contextSnapshot` with the current state
+
+## After Modifying Files — Update Memory
+
+When you finish working on a file:
+
+1. Call `agentsmcp_upsert_index` with:
+   - `key`: `"file:relative/path.ts"`
+   - `category`: `"file"`
+   - `summary`: ~200-token summary of what the file does, its exports, key functions
+   - `metadata`: `{ lines, exports, imports, dependencies }`
+
+2. Call `agentsmcp_upsert_node` to register the file in the graph:
+   - `id`: `"file:relative/path.ts"`
+   - `type`: `"file"`
+   - `name`: filename
+   - `description`: one-line role
+
+3. Call `agentsmcp_add_edge` to connect it to related nodes:
+   - `"contains"` edges to symbols defined in the file
+   - `"resolves"` edges to tasks it implements
+   - `"references"` edges to files it imports
+
+## After Design Decisions — Record in Graph
+
+When the user makes an architectural or design choice:
+
+1. Call `agentsmcp_upsert_node` with type `"decision"`
+2. Call `agentsmcp_add_edge` to connect the decision to implementing files/symbols
 
 ## On Task Completion
 

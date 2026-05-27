@@ -8,7 +8,13 @@ import {
   Thread,
   ThreadSummary,
 } from "../types";
-import { Storage, StorageOptions } from "./interface";
+import {
+  CodebaseIndexEntry,
+  GraphEdge,
+  GraphNode,
+  Storage,
+  StorageOptions,
+} from "./interface";
 
 // Minimal structural type we need from `pg`. Avoids a hard compile-time
 // dependency for callers who only use the SQLite adapter — mirrors the
@@ -182,6 +188,42 @@ export class PostgresStorage implements Storage {
           summary JSONB NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS graph_nodes (
+          id TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('message', 'file', 'symbol', 'decision', 'task')),
+          name TEXT NOT NULL,
+          description TEXT,
+          metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (id, agent_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS graph_edges (
+          source_id TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          weight REAL NOT NULL DEFAULT 1.0,
+          PRIMARY KEY (source_id, target_id, type)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_graph_nodes_agent ON graph_nodes(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source_id);
+        CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target_id);
+
+        CREATE TABLE IF NOT EXISTS codebase_index (
+          key TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          category TEXT NOT NULL CHECK (category IN ('file', 'symbol', 'api', 'config', 'architecture')),
+          summary TEXT NOT NULL,
+          metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (key, agent_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_codebase_index_agent ON codebase_index(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_codebase_index_category ON codebase_index(agent_id, category);
       `);
 
       // Migration 003: GitHub OAuth fields on users
@@ -620,6 +662,253 @@ export class PostgresStorage implements Storage {
          summary = excluded.summary,
          created_at = NOW()`,
       [threadId, JSON.stringify(summary)]
+    );
+  }
+
+  // ---------- Context Graph ----------
+
+  async upsertNode(
+    agentId: AgentAddress,
+    node: Omit<GraphNode, "updatedAt">
+  ): Promise<void> {
+    const pool = await this.getPool();
+    await pool.query(
+      `INSERT INTO graph_nodes (id, agent_id, type, name, description, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+       ON CONFLICT (id, agent_id) DO UPDATE SET
+         type = EXCLUDED.type,
+         name = EXCLUDED.name,
+         description = EXCLUDED.description,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()`,
+      [
+        node.id,
+        agentId,
+        node.type,
+        node.name,
+        node.description ?? null,
+        JSON.stringify(node.metadata ?? {}),
+      ]
+    );
+  }
+
+  async deleteNode(agentId: AgentAddress, nodeId: string): Promise<void> {
+    const pool = await this.getPool();
+    // Delete edges first
+    await pool.query(
+      "DELETE FROM graph_edges WHERE source_id = $1 OR target_id = $1",
+      [nodeId]
+    );
+    await pool.query(
+      "DELETE FROM graph_nodes WHERE id = $1 AND agent_id = $2",
+      [nodeId, agentId]
+    );
+  }
+
+  async addEdge(edge: GraphEdge): Promise<void> {
+    const pool = await this.getPool();
+    await pool.query(
+      `INSERT INTO graph_edges (source_id, target_id, type, weight)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (source_id, target_id, type) DO UPDATE SET
+         weight = EXCLUDED.weight`,
+      [edge.sourceId, edge.targetId, edge.type, edge.weight]
+    );
+  }
+
+  async deleteEdge(
+    sourceId: string,
+    targetId: string,
+    type: string
+  ): Promise<void> {
+    const pool = await this.getPool();
+    await pool.query(
+      "DELETE FROM graph_edges WHERE source_id = $1 AND target_id = $2 AND type = $3",
+      [sourceId, targetId, type]
+    );
+  }
+
+  async queryGraph(
+    agentId: AgentAddress,
+    query: string
+  ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+    const pool = await this.getPool();
+    const pattern = `%${query}%`;
+
+    // Step 1: Seed nodes matching query
+    const seedRes = await pool.query<{ id: string }>(
+      `SELECT id FROM graph_nodes
+       WHERE agent_id = $1 AND (name ILIKE $2 OR description ILIKE $2)`,
+      [agentId, pattern]
+    );
+
+    if (seedRes.rows.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+
+    const seedIds = seedRes.rows.map((r) => r.id);
+
+    // Step 2: 2-hop traversal via recursive CTE
+    const traversalRes = await pool.query<{ node_id: string }>(
+      `WITH RECURSIVE hops(node_id, depth) AS (
+         SELECT id, 0 FROM graph_nodes
+         WHERE id = ANY($1::text[]) AND agent_id = $2
+         UNION
+         SELECT CASE
+           WHEN e.source_id = h.node_id THEN e.target_id
+           ELSE e.source_id
+         END, h.depth + 1
+         FROM hops h
+         JOIN graph_edges e ON (e.source_id = h.node_id OR e.target_id = h.node_id)
+         WHERE h.depth < 2
+       )
+       SELECT DISTINCT node_id FROM hops`,
+      [seedIds, agentId]
+    );
+
+    const allIds = traversalRes.rows.map((r) => r.node_id);
+    if (allIds.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+
+    // Step 3: Fetch full nodes
+    const nodeRes = await pool.query<{
+      id: string;
+      type: string;
+      name: string;
+      description: string | null;
+      metadata: Record<string, unknown>;
+      updated_at: Date;
+    }>(
+      `SELECT id, type, name, description, metadata, updated_at
+       FROM graph_nodes
+       WHERE id = ANY($1::text[]) AND agent_id = $2`,
+      [allIds, agentId]
+    );
+
+    const nodes: GraphNode[] = nodeRes.rows.map((r) => ({
+      id: r.id,
+      type: r.type as GraphNode["type"],
+      name: r.name,
+      description: r.description ?? undefined,
+      metadata: r.metadata,
+      updatedAt: toMs(r.updated_at),
+    }));
+
+    // Step 4: Fetch edges between returned nodes
+    const edgeRes = await pool.query<{
+      source_id: string;
+      target_id: string;
+      type: string;
+      weight: number;
+    }>(
+      `SELECT source_id, target_id, type, weight
+       FROM graph_edges
+       WHERE source_id = ANY($1::text[]) AND target_id = ANY($1::text[])`,
+      [allIds]
+    );
+
+    const edges: GraphEdge[] = edgeRes.rows.map((r) => ({
+      sourceId: r.source_id,
+      targetId: r.target_id,
+      type: r.type,
+      weight: r.weight,
+    }));
+
+    return { nodes, edges };
+  }
+
+  // ---------- Codebase Index ----------
+
+  async upsertIndex(
+    agentId: AgentAddress,
+    entry: Omit<CodebaseIndexEntry, "updatedAt">
+  ): Promise<void> {
+    const pool = await this.getPool();
+    await pool.query(
+      `INSERT INTO codebase_index (key, agent_id, category, summary, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+       ON CONFLICT (key, agent_id) DO UPDATE SET
+         category = EXCLUDED.category,
+         summary = EXCLUDED.summary,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()`,
+      [
+        entry.key,
+        agentId,
+        entry.category,
+        entry.summary,
+        JSON.stringify(entry.metadata ?? {}),
+      ]
+    );
+  }
+
+  async getIndex(
+    agentId: AgentAddress,
+    key: string
+  ): Promise<CodebaseIndexEntry | null> {
+    const pool = await this.getPool();
+    const res = await pool.query<{
+      key: string;
+      category: string;
+      summary: string;
+      metadata: Record<string, unknown>;
+      updated_at: Date;
+    }>(
+      `SELECT key, category, summary, metadata, updated_at
+       FROM codebase_index WHERE key = $1 AND agent_id = $2`,
+      [key, agentId]
+    );
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      key: r.key,
+      category: r.category as CodebaseIndexEntry["category"],
+      summary: r.summary,
+      metadata: r.metadata,
+      updatedAt: toMs(r.updated_at),
+    };
+  }
+
+  async searchIndex(
+    agentId: AgentAddress,
+    query: string,
+    category?: string
+  ): Promise<CodebaseIndexEntry[]> {
+    const pool = await this.getPool();
+    const pattern = `%${query}%`;
+    const params: unknown[] = [agentId, pattern];
+    let sql = `SELECT key, category, summary, metadata, updated_at
+               FROM codebase_index
+               WHERE agent_id = $1 AND (key ILIKE $2 OR summary ILIKE $2)`;
+    if (category) {
+      params.push(category);
+      sql += ` AND category = $${params.length}`;
+    }
+    sql += " ORDER BY updated_at DESC LIMIT 50";
+
+    const res = await pool.query<{
+      key: string;
+      category: string;
+      summary: string;
+      metadata: Record<string, unknown>;
+      updated_at: Date;
+    }>(sql, params);
+
+    return res.rows.map((r) => ({
+      key: r.key,
+      category: r.category as CodebaseIndexEntry["category"],
+      summary: r.summary,
+      metadata: r.metadata,
+      updatedAt: toMs(r.updated_at),
+    }));
+  }
+
+  async deleteIndex(agentId: AgentAddress, key: string): Promise<void> {
+    const pool = await this.getPool();
+    await pool.query(
+      "DELETE FROM codebase_index WHERE key = $1 AND agent_id = $2",
+      [key, agentId]
     );
   }
 }

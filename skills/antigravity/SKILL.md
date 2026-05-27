@@ -27,6 +27,23 @@ so you can pick up exactly where the last agent (or the last session) left off.
 - **After completing work**: Record decisions, artifacts, and progress to the thread
 - **Cross-platform continuity**: Context follows the user across Cursor, Claude Desktop, Antigravity, Continue, and any MCP client
 
+## RULE #1: Memory First — ALWAYS
+
+When a user gives you ANY query or task:
+
+1. **IMMEDIATELY** call `agentsmcp_context_briefing` with the user's query as the `task` parameter
+2. Read the returned briefing — it contains relevant files, symbols, decisions, tasks, and relationships from persistent memory
+3. If the briefing returns results, USE THEM as your starting context instead of reading raw files
+4. Only fall back to `grep` / `view_file` / `read_file` when the briefing returns empty results
+
+### Context Lookup Priority (use in order)
+
+1. `agentsmcp_context_briefing` — one-shot task briefing (graph + index combined)
+2. `agentsmcp_get_index` — look up a specific file/symbol by key (~200 tokens vs full file)
+3. `agentsmcp_search_index` — keyword search across all indexed entries (replaces grep)
+4. `agentsmcp_query_graph` — relationship traversal (find connected files/symbols/decisions)
+5. **LAST RESORT**: `grep` / `view_file` — only when memory has no entry
+
 ## Setup
 
 ### Quick Setup (MCP)
@@ -179,6 +196,8 @@ Arguments:
 
 ## MCP Tool Reference
 
+### Messaging
+
 | Tool | Purpose | Key Arguments |
 |:-----|:--------|:-------------|
 | `agentsmcp_send` | Send a message, create a thread | `to`, `body`, `cc`, `bcc`, `contextSnapshot` |
@@ -189,6 +208,28 @@ Arguments:
 | `agentsmcp_mark_read` | Mark a thread as read | `threadId` |
 | `agentsmcp_reply_all` | Reply to all visible participants | `threadId`, `body` |
 | `agentsmcp_participants` | List participants with roles | `threadId` |
+
+### Context Graph
+
+| Tool | Purpose | Key Arguments |
+|:-----|:--------|:-------------|
+| `agentsmcp_upsert_node` | Register a file/symbol/decision/task node | `id`, `type`, `name`, `description` |
+| `agentsmcp_add_edge` | Connect two nodes with a typed edge | `sourceId`, `targetId`, `type` |
+| `agentsmcp_query_graph` | Keyword search + 2-hop graph traversal | `query` |
+
+### Codebase Index
+
+| Tool | Purpose | Key Arguments |
+|:-----|:--------|:-------------|
+| `agentsmcp_upsert_index` | Register a file/symbol/API summary | `key`, `category`, `summary` |
+| `agentsmcp_get_index` | Look up a specific entry by key | `key` |
+| `agentsmcp_search_index` | Search across all indexed entries | `query`, `category` |
+
+### Context Assembly
+
+| Tool | Purpose | Key Arguments |
+|:-----|:--------|:-------------|
+| `agentsmcp_context_briefing` | One-shot task briefing (graph + index) | `task`, `include_threads` |
 
 ## Cross-Platform Continuity
 
@@ -207,13 +248,14 @@ is instantly available in Claude Desktop and Antigravity.
 
 ## Best Practices
 
-1. **Always receive on session start** — Don't make the user manually ask for context
-2. **Send structured messages** — Use JSON bodies with clear fields (task, status, decisions, openQuestions)
-3. **Include contextSnapshot** — This is the state that the next agent gets immediately
-4. **Use CC for observers** — Agents that need to stay informed but aren't the primary recipient
-5. **Use BCC for loggers** — Silent participants that track everything without being visible
-6. **Send session summaries** — Before ending, preserve context for the next session
-7. **Sync before acting** — If a thread exists, sync it before making decisions to avoid stale context
+1. **Memory first** — Always call `agentsmcp_context_briefing` before reading files
+2. **Always receive on session start** — Don't make the user manually ask for context
+3. **Update memory after edits** — Call `upsert_index` + `upsert_node` + `add_edge` after modifying files
+4. **Record decisions** — Call `upsert_node(type=decision)` when design choices are made
+5. **Send structured messages** — Use JSON bodies with clear fields (task, status, decisions, openQuestions)
+6. **Include contextSnapshot** — This is the state that the next agent gets immediately
+7. **Send session summaries** — Before ending, preserve context for the next session
+8. **Sync before acting** — If a thread exists, sync it before making decisions to avoid stale context
 
 ## Links
 

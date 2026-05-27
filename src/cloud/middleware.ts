@@ -4,6 +4,8 @@ import {
   verifyApiKey,
   getPlanLimits,
   PlanLimits,
+  verifySession,
+  getUser,
 } from "./auth";
 import { ScopedStorage } from "./scoping";
 import { Storage } from "../storage/interface";
@@ -28,6 +30,8 @@ declare global {
 export interface CloudAuthOptions {
   /** Shared pg.Pool — typically `await postgresStorage.getRawPool()`. */
   pool: PgPoolLike;
+  /** Secret used to verify JWT session tokens. */
+  sessionSecret?: string;
 }
 
 const SKIPPED_PREFIXES = [
@@ -50,17 +54,13 @@ function shouldSkipAuth(path: string): boolean {
  * scoped `ScopedStorage`, and load the user's plan caps for downstream
  * enforcement.
  *
- * Skipped paths:
- *   - GET /health
- *   - GET /.well-known/*  (Agent Cards must be publicly discoverable)
- *   - POST /auth/register (signup needs no key)
- *   - GET /usage/* (rate-limiter introspection)
+ * Supports both API keys (starting with sk_live_) and dashboard JWT session tokens.
  *
  * Returns 401 with `{error:"invalid_api_key"}` for any failure mode —
  * don't distinguish missing vs revoked vs expired in the response shape.
  */
 export function cloudAuth(opts: CloudAuthOptions) {
-  const { pool } = opts;
+  const { pool, sessionSecret } = opts;
   return async (req: Request, res: Response, next: NextFunction) => {
     if (shouldSkipAuth(req.path)) return next();
 
@@ -72,10 +72,28 @@ export function cloudAuth(opts: CloudAuthOptions) {
     const token = header.slice(prefix.length).trim();
 
     try {
-      const verified = await verifyApiKey(pool, token);
+      let verified: { userId: string; plan: string; keyId: string } | null = null;
+
+      if (token.startsWith("sk_live_")) {
+        verified = await verifyApiKey(pool, token);
+      } else if (sessionSecret) {
+        const payload = verifySession(token, sessionSecret);
+        if (payload) {
+          const user = await getUser(pool, payload.userId);
+          if (user) {
+            verified = {
+              userId: user.userId,
+              plan: user.plan,
+              keyId: "__session__",
+            };
+          }
+        }
+      }
+
       if (!verified) {
         return res.status(401).json({ error: "invalid_api_key" });
       }
+
       req.userId = verified.userId;
       req.userPlan = verified.plan;
       req.apiKeyId = verified.keyId;

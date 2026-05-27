@@ -114,4 +114,112 @@ export interface Storage {
    * always replaces the previous row for the same thread.
    */
   saveSummary(threadId: string, summary: ThreadSummary): Promise<void>;
+
+  // ---------- Context Graph ----------
+
+  /**
+   * Insert or update a graph node. The node id is the primary key scoped
+   * to agentId. `updatedAt` is set automatically by the adapter.
+   */
+  upsertNode(
+    agentId: AgentAddress,
+    node: Omit<GraphNode, "updatedAt">
+  ): Promise<void>;
+
+  /** Delete a graph node and all its connected edges (CASCADE). */
+  deleteNode(agentId: AgentAddress, nodeId: string): Promise<void>;
+
+  /** Insert or update a directed edge between two existing nodes. */
+  addEdge(edge: GraphEdge): Promise<void>;
+
+  /** Remove a specific edge. */
+  deleteEdge(
+    sourceId: string,
+    targetId: string,
+    type: string
+  ): Promise<void>;
+
+  /**
+   * Keyword search on node name/description, then 2-hop graph traversal
+   * to pull connected entities. Returns the matched nodes and all edges
+   * within the traversal radius.
+   */
+  queryGraph(
+    agentId: AgentAddress,
+    query: string
+  ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }>;
+
+  // ---------- Codebase Index ----------
+
+  /**
+   * Insert or update an index entry. `updatedAt` is set automatically.
+   * Agents call this incrementally as they touch files, discover symbols,
+   * or make architectural decisions.
+   */
+  upsertIndex(
+    agentId: AgentAddress,
+    entry: Omit<CodebaseIndexEntry, "updatedAt">
+  ): Promise<void>;
+
+  /** Look up a specific index entry by key. Returns `null` when not found. */
+  getIndex(
+    agentId: AgentAddress,
+    key: string
+  ): Promise<CodebaseIndexEntry | null>;
+
+  /**
+   * Keyword search across all index entries for an agent. Optionally
+   * filter by category. Returns entries whose key, summary, or metadata
+   * contain the query terms.
+   */
+  searchIndex(
+    agentId: AgentAddress,
+    query: string,
+    category?: string
+  ): Promise<CodebaseIndexEntry[]>;
+
+  /** Remove a single index entry. */
+  deleteIndex(agentId: AgentAddress, key: string): Promise<void>;
+}
+
+// ---------- Context Graph types ----------
+
+export type GraphNodeType =
+  | "message"
+  | "file"
+  | "symbol"
+  | "decision"
+  | "task";
+
+export interface GraphNode {
+  id: string;
+  type: GraphNodeType;
+  name: string;
+  description?: string;
+  metadata: Record<string, unknown>;
+  updatedAt: number;
+}
+
+export interface GraphEdge {
+  sourceId: string;
+  targetId: string;
+  type: string;
+  weight: number;
+}
+
+// ---------- Codebase Index types ----------
+
+export type IndexCategory =
+  | "file"
+  | "symbol"
+  | "api"
+  | "config"
+  | "architecture";
+
+export interface CodebaseIndexEntry {
+  key: string;
+  category: IndexCategory;
+  summary: string;
+  metadata: Record<string, unknown>;
+  updatedAt: number;
 }
