@@ -1,6 +1,6 @@
 {
   "name": "agentsmcp-langgraph",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "LangGraph BaseCheckpointSaver backed by agentsmcp (AgentMailbox). Drop-in checkpointer for LangGraph.js — your graph state lives in an AgentMailbox thread.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

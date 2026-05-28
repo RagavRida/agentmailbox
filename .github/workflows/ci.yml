@@ -22,6 +22,29 @@ jobs:
       - name: Verify MCP bin has shebang
         run: head -1 dist/mcp/index.js | grep -q '#!/usr/bin/env node'
 
+  langgraph:
+    name: LangGraph adapter
+    runs-on: ubuntu-latest
+    needs: js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+        name: Build main package (agentsmcp)
+      - name: Install LangGraph deps against local agentsmcp
+        run: npm install --no-save file:..
+        working-directory: langgraph
+      - run: npm ci
+        working-directory: langgraph
+      - run: npm run build
+        working-directory: langgraph
+      - run: npm test
+        working-directory: langgraph
+
   python:
     name: Python ${{ matrix.python }}
     runs-on: ubuntu-latest
