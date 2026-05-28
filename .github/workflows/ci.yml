@@ -33,13 +33,14 @@ jobs:
           node-version: "20"
           cache: "npm"
       - run: npm ci
-      - run: npm run build
-        name: Build main package (agentsmcp)
-      - name: Install LangGraph deps against local agentsmcp
+      - name: Build main package (agentsmcp)
+        run: npm run build
+      - name: Install LangGraph deps (link local agentsmcp build)
+        working-directory: langgraph
+        run: npm install
+      - name: Overlay local agentsmcp build
+        working-directory: langgraph
         run: npm install --no-save file:..
-        working-directory: langgraph
-      - run: npm ci
-        working-directory: langgraph
       - run: npm run build
         working-directory: langgraph
       - run: npm test
