@@ -8,7 +8,6 @@ agent ever starts cold.
 
 [![npm](https://img.shields.io/npm/v/agentsmcp.svg?label=npm%20agentsmcp)](https://www.npmjs.com/package/agentsmcp)
 [![PyPI](https://img.shields.io/pypi/v/agentsmcp.svg?label=PyPI%20agentsmcp)](https://pypi.org/project/agentsmcp/)
-[![npm adapter](https://img.shields.io/npm/v/agentsmcp-adapter.svg?label=npm%20agentsmcp-adapter%20(deprecated))](https://www.npmjs.com/package/agentsmcp-adapter)
 [![npm langgraph](https://img.shields.io/npm/v/agentsmcp-langgraph.svg?label=npm%20agentsmcp-langgraph)](https://www.npmjs.com/package/agentsmcp-langgraph)
 [![skills.sh](https://skills.sh/b/RagavRida/agentsmcp)](https://skills.sh/RagavRida/agentsmcp)
 [![CI](https://github.com/RagavRida/agentsmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/RagavRida/agentsmcp/actions/workflows/ci.yml)
@@ -91,7 +90,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
 }
 ```
 
-Restart Claude Desktop. It now has access to agentsmcp tools.
+Restart Claude Desktop. It now has access to all 15 agentsmcp tools.
 
 ### Antigravity / Gemini CLI
 
@@ -142,6 +141,18 @@ await agent.send("other-agent@app", {"task": "analyze data"})
 
 # Receive (with full thread context)
 messages = await agent.receive()
+
+# Context graph — persist relationships across restarts
+await agent.upsert_node(id="file:main.py", type="file", name="main.py",
+                        description="Entrypoint")
+await agent.add_edge("file:main.py", "sym:run", "contains")
+result = await agent.query_graph("main")
+
+# Codebase index — fast lookup without re-reading files
+await agent.upsert_index(key="file:main.py", category="file",
+                         summary="FastAPI entrypoint with lifespan handlers")
+entry = await agent.get_index("file:main.py")
+hits  = await agent.search_index("FastAPI", category="file")
 ```
 
 > The PyPI package name is `agentsmcp`; the import path stays
@@ -164,6 +175,43 @@ const agent = new AgentMailbox({
 
 await agent.send("other@app", { task: "done", result: data });
 const { messages } = await agent.receive();
+
+// Context graph
+await agent.upsertNode({ id: "file:server.ts", type: "file", name: "server.ts" });
+await agent.addEdge({ sourceId: "file:server.ts", targetId: "sym:createApp", type: "contains" });
+const { nodes, edges } = await agent.queryGraph("server");
+
+// Codebase index
+await agent.upsertIndex({ key: "api:POST /invoke", category: "api",
+                           summary: "Invokes the compiled graph" });
+const entry  = await agent.getIndex("api:POST /invoke");
+const hits   = await agent.searchIndex("invoke", "api");
+```
+
+### LangGraph (JavaScript)
+
+```bash
+npm install agentsmcp-langgraph @langchain/langgraph
+```
+
+```ts
+import { AgentsmcpSaver } from "agentsmcp-langgraph";
+
+const checkpointer = new AgentsmcpSaver({
+  server: "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
+  agentId: "langgraph@my-app",
+  apiKey: "sk_live_YOUR_KEY",
+});
+await checkpointer.connect();
+
+// LangGraph checkpointing — survives restarts, cross-machine
+const graph = workflow.compile({ checkpointer });
+await graph.invoke(input, { configurable: { thread_id: "session-abc" } });
+
+// Context graph on the same saver instance (v0.2.0+)
+await checkpointer.upsertNode({ id: "file:agent.ts", type: "file", name: "agent.ts" });
+await checkpointer.upsertIndex({ key: "file:agent.ts", category: "file",
+                                  summary: "LangGraph state machine" });
 ```
 
 ### REST API (Any Language)
@@ -185,23 +233,24 @@ curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/messages/send \
     "from": "agent-a@app",
     "to": "agent-b@app",
     "payload": {"task": "analyze", "data": [1, 2, 3]},
-    "cc": ["observer@app"],
-    "bcc": ["logger@app"]
+    "cc": ["observer@app"]
   }'
+
+# Context graph — upsert a node
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/graph/nodes \
+  -H "Authorization: Bearer sk_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"file:main.py","type":"file","name":"main.py"}'
+
+# Codebase index — upsert an entry
+curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/index \
+  -H "Authorization: Bearer sk_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"file:main.py","category":"file","summary":"FastAPI entrypoint"}'
 
 # Get unread messages (with full thread context)
 curl https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/unread \
   -H "Authorization: Bearer sk_live_YOUR_KEY"
-
-# Sync thread context
-curl https://hdnxa5c8yr.us-east-1.awsapprunner.com/threads/THREAD_ID/sync \
-  -H "Authorization: Bearer sk_live_YOUR_KEY"
-
-# Mark thread as read
-curl -X POST https://hdnxa5c8yr.us-east-1.awsapprunner.com/mailbox/my-agent@app/read \
-  -H "Authorization: Bearer sk_live_YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"threadId":"THREAD_ID"}'
 ```
 
 ## Self-Hosted
@@ -235,28 +284,71 @@ for a step-by-step Docker + App Runner walkthrough, or
 [infra/README.md](./infra/README.md) for the Postgres + VPC connector
 production layout.
 
+## MCP Tools (v0.4.0 — 15 tools)
+
+When connected via MCP, your AI coding assistant gets 15 tools:
+
+| Tool | Description |
+|:---|:---|
+| `agentsmcp_send` | Send a message to another agent |
+| `agentsmcp_receive` | Get unread messages with full thread context |
+| `agentsmcp_list_threads` | List all threads for this agent |
+| `agentsmcp_get_thread` | Get messages on a specific thread |
+| `agentsmcp_sync_thread` | Sync full context for a thread |
+| `agentsmcp_mark_read` | Mark a thread as read |
+| `agentsmcp_reply_all` | Reply to all participants on a thread |
+| `agentsmcp_get_participants` | Get participants and roles on a thread |
+| `agentsmcp_upsert_node` | Register a context graph node (file, symbol, decision…) |
+| `agentsmcp_add_edge` | Connect two graph nodes with a typed edge |
+| `agentsmcp_query_graph` | Keyword-search the context graph |
+| `agentsmcp_upsert_index` | Register or update a codebase index entry |
+| `agentsmcp_get_index` | Exact-key lookup in the codebase index |
+| `agentsmcp_search_index` | Keyword-search the codebase index |
+| `agentsmcp_context_briefing` | Get a targeted context briefing for a task |
+
 ## API Reference
+
+### Messaging
 
 | Method | Endpoint | Auth | Description |
 |:---|:---|:---|:---|
 | POST | `/auth/register` | None | Sign up, get API key |
 | GET | `/auth/me` | Bearer | Your account + current usage |
-| GET | `/auth/keys` | Bearer | List your active API keys (never returns the full key) |
+| GET | `/auth/keys` | Bearer | List your active API keys |
 | POST | `/auth/keys` | Bearer | Mint an additional key |
-| DELETE | `/auth/keys/:keyId` | Bearer | Revoke a key (can't revoke the current one) |
+| DELETE | `/auth/keys/:keyId` | Bearer | Revoke a key |
 | POST | `/agents/register` | Bearer | Register an agent |
 | POST | `/messages/send` | Bearer | Send message (TO / CC / BCC) |
 | POST | `/messages/reply-all` | Bearer | Reply to every visible participant |
 | GET | `/mailbox/:agentId` | Bearer | List threads |
-| GET | `/mailbox/:agentId/unread` | Bearer | Unread messages + full thread context |
+| GET | `/mailbox/:agentId/unread` | Bearer | Unread messages + full context |
 | POST | `/mailbox/:agentId/read` | Bearer | Mark thread as read |
 | GET | `/threads/:threadId` | Bearer | Thread detail |
 | GET | `/threads/:threadId/sync` | Bearer | Assembled context frame |
 | GET | `/threads/:threadId/participants` | Bearer | Participants with roles |
-| GET | `/usage/:identifier` | None | Current rate-limit usage (cloud only) |
+| GET | `/usage/:identifier` | None | Rate-limit usage (cloud only) |
 | GET | `/health` | None | Health check |
 | GET | `/.well-known/agent-card.json` | None | A2A v1.0 Agent Card |
 | GET | `/.well-known/agent-card/:agentId` | None | Per-agent A2A card |
+
+### Context Graph
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| POST | `/mailbox/:agentId/graph/nodes` | Bearer | Upsert a graph node |
+| DELETE | `/mailbox/:agentId/graph/nodes/:nodeId` | Bearer | Delete a node + its edges |
+| POST | `/mailbox/:agentId/graph/edges` | Bearer | Add a directed edge |
+| DELETE | `/mailbox/:agentId/graph/edges` | Bearer | Remove an edge |
+| GET | `/mailbox/:agentId/graph/query?q=…` | Bearer | Keyword search + 2-hop traversal |
+
+### Codebase Index
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| POST | `/mailbox/:agentId/index` | Bearer | Upsert an index entry |
+| GET | `/mailbox/:agentId/index?q=…[&category=…]` | Bearer | Keyword search |
+| GET | `/mailbox/:agentId/index/:key` | Bearer | Exact-key lookup |
+| DELETE | `/mailbox/:agentId/index/:key` | Bearer | Delete an entry |
 
 `Bearer` = `Authorization: Bearer sk_live_xxx` (cloud) or
 `Authorization: Bearer <AGENTSMCP_API_KEY>` (self-hosted, when set).
@@ -290,6 +382,12 @@ current/limit values. Need more? [Self-host](#self-hosted) for unlimited
   `openQuestions`, `artifacts`) the moment they cross a configurable
   threshold. Default is zero-config; opt in to Claude-backed
   compression with one constructor argument.
+- **Context graph.** Persist a knowledge graph of code relationships
+  (files → symbols → decisions) that survives restarts and is
+  searchable by any agent or MCP tool.
+- **Codebase index.** Register summarised descriptions of files,
+  symbols, APIs, and architecture notes for fast lookup — no re-reading
+  full source on every run.
 - **Cross-tool peer participation.** Any MCP-aware client becomes a
   peer in the conversation without writing SDK code.
 - **Multi-agent semantics.** TO / CC / BCC roles work the way email
@@ -297,6 +395,10 @@ current/limit values. Need more? [Self-host](#self-hosted) for unlimited
 - **A2A v1.0 discoverable.** Every deploy ships a public Agent Card at
   `/.well-known/agent-card.json` so other agent frameworks can find
   and connect to it without prior knowledge.
+- **LangGraph checkpointer.** `AgentsmcpSaver` stores graph state in
+  agentsmcp threads — survives restarts, works cross-machine, readable
+  from any SDK. Context graph and codebase index methods ship on the
+  same object (v0.2.0+).
 
 ## Multi-agent threads
 
@@ -348,9 +450,6 @@ is `NoopCompressor` — keeps zero-config installs working without an LLM
 dependency. The interface is provider-agnostic; additional compressors
 (OpenAI, local models) can be added by implementing
 `Compressor.compress()`.
-
-`@anthropic-ai/sdk` is an optional peer dependency, installed only by
-projects that use `ClaudeCompressor`.
 
 ## The headline demo
 
@@ -417,17 +516,21 @@ See [`skills/README.md`](./skills/README.md) for details on all skills.
 ## Development
 
 ```bash
-# JS SDK + server
+# Install + type-check + test (JS server, SDK, MCP — all in one package)
 npm ci && npx tsc --noEmit && npm test
 
-# MCP adapter
-cd mcp && npm ci && npx tsc --noEmit && npm run build
+# End-to-end smoke test (boots real server, exercises 12 steps)
+npm run smoke:e2e
+
+# LangGraph adapter
+cd langgraph && npm install && npm run build && npm test
 
 # Python SDK
 cd sdk-py && pip install -e ".[dev]" && pytest -q
 ```
 
-The full test matrix runs in CI on every push to `main`.
+The full test matrix (JS + LangGraph + Python 3.10/3.11/3.12) runs in
+CI on every push to `main`.
 
 ## Contributing
 
@@ -446,8 +549,8 @@ deliberately stable, but there is a lot of useful work still to do.
 - Additional `Storage` adapters (Redis, DynamoDB). The `Storage`
   interface is async-first and provider-agnostic; SQLite and Postgres
   are the reference implementations.
-- Framework adapters (LangGraph checkpointer, CrewAI task handoff,
-  Vercel AI SDK middleware).
+- Framework adapters (CrewAI task handoff, Vercel AI SDK middleware —
+  LangGraph is already done).
 - Real-world demos beyond `examples/research-bench`. Multi-day
   workflows, cross-language pipelines, agent-in-the-loop patterns.
 - Documentation, tutorials, and integration recipes.
@@ -462,7 +565,7 @@ deliberately stable, but there is a lot of useful work still to do.
 3. CI must be green. Run the test matrix locally before pushing:
    ```bash
    npm ci && npx tsc --noEmit && npm test
-   cd mcp && npm ci && npx tsc --noEmit && npm run build
+   cd langgraph && npm install && npm run build && npm test
    cd sdk-py && pip install -e ".[dev]" && pytest -q
    ```
 4. Include a CHANGELOG entry under the current unreleased version
