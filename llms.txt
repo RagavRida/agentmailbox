@@ -32,7 +32,8 @@ npm install agentsmcp
 pip install agentsmcp
 
 # MCP adapter for Claude Desktop / Cursor / Continue / Antigravity / any MCP client
-npm install -g agentsmcp-adapter
+# No separate install needed — included in agentsmcp:
+npx agentsmcp
 
 # LangGraph checkpointer (drop-in BaseCheckpointSaver)
 npm install agentsmcp-langgraph
@@ -59,7 +60,7 @@ cp -r skills/cursor/rules/ .cursor/rules/
 - Cross-tool interop — any MCP-aware client becomes a peer participant
 - Multi-agent semantics — TO/CC/BCC roles work like email with full context propagation
 - SDK support — JavaScript/TypeScript and Python (async + sync)
-- MCP adapter — 8 tools + 2 resources for any MCP-compatible client
+- MCP adapter — 15 tools + 2 resources for any MCP-compatible client
 - LangGraph integration — drop-in checkpointer adapter
 - Pluggable storage — SQLite (default), Postgres and Redis interfaces ready
 - Pluggable compression — NoopCompressor, ClaudeCompressor, OpenAICompressor
@@ -119,6 +120,13 @@ async with AgentMailbox("myagent@app", server="http://localhost:3000") as agent:
 | agentsmcp_mark_read | Mark a thread as read |
 | agentsmcp_reply_all | Reply to every visible participant |
 | agentsmcp_participants | List visible participants with roles |
+| agentsmcp_upsert_node | Register a context graph node (file, symbol, decision, task) |
+| agentsmcp_add_edge | Connect two graph nodes with a typed edge |
+| agentsmcp_query_graph | Search the context graph by keywords |
+| agentsmcp_upsert_index | Register a codebase index entry |
+| agentsmcp_get_index | Look up a codebase index entry by key |
+| agentsmcp_search_index | Search the codebase index by keywords |
+| agentsmcp_context_briefing | Get a targeted context briefing for a task |
 
 ## MCP Configuration
 
@@ -127,7 +135,7 @@ async with AgentMailbox("myagent@app", server="http://localhost:3000") as agent:
   "mcpServers": {
     "agentsmcp": {
       "command": "npx",
-      "args": ["-y", "agentsmcp-adapter"],
+      "args": ["-y", "agentsmcp"],
       "env": {
         "AGENTSMCP_AGENT_ID": "agent@local",
         "AGENTSMCP_SERVER": "http://localhost:3000"

@@ -81,6 +81,74 @@ If you want every process to share state, pin `agentId` to a stable
 string. If you want each process to have its own slice, let it default
 to the hostname.
 
+## Context Graph (v0.4.0+)
+
+Track relationships between code artifacts alongside your LangGraph state.
+Nodes and edges are stored per-agent in agentsmcp and survive across restarts.
+
+```ts
+const checkpointer = new AgentsmcpSaver({ server, agentId: "langgraph@my-app" });
+await checkpointer.connect();
+
+// Register nodes (files, symbols, decisions, tasks, ...)
+await checkpointer.upsertNode({
+  id: "file:src/agent.ts",
+  type: "file",
+  name: "agent.ts",
+  description: "Main LangGraph agent definition",
+  metadata: { lineCount: 240 },
+});
+await checkpointer.upsertNode({
+  id: "symbol:runGraph",
+  type: "symbol",
+  name: "runGraph",
+});
+
+// Connect nodes
+await checkpointer.addEdge({
+  sourceId: "file:src/agent.ts",
+  targetId: "symbol:runGraph",
+  type: "contains",
+});
+
+// Query by keywords — returns matching nodes + 2-hop neighbourhood
+const { nodes, edges } = await checkpointer.queryGraph("agent");
+```
+
+Node types: `"file"` | `"symbol"` | `"decision"` | `"task"` | `"concept"`.  
+Edge types: `"references"` | `"contains"` | `"resolves"` | `"depends_on"` | `"semantic"`.
+
+## Codebase Index (v0.4.0+)
+
+Persist summarised descriptions of files, symbols, APIs, configs, and
+architecture notes so future graph invocations can look them up without
+re-reading the full source.
+
+```ts
+// Upsert entries (key is your canonical identifier)
+await checkpointer.upsertIndex({
+  key: "file:src/agent.ts",
+  category: "file",
+  summary: "LangGraph state machine with conditional routing and tool calling",
+  metadata: { exports: ["runGraph", "AgentState"] },
+});
+await checkpointer.upsertIndex({
+  key: "api:POST /invoke",
+  category: "api",
+  summary: "Invokes the compiled graph; accepts { input, thread_id }",
+});
+
+// Exact lookup
+const entry = await checkpointer.getIndex("file:src/agent.ts");
+// { key, category, summary, metadata, updatedAt }
+
+// Keyword search, optionally filtered by category
+const results = await checkpointer.searchIndex("tool calling");
+const apiResults = await checkpointer.searchIndex("invoke", "api");
+```
+
+Categories: `"file"` | `"symbol"` | `"api"` | `"config"` | `"architecture"`.
+
 ## Limitations (worth knowing)
 
 - **`list()` reads the whole thread.** Fine for ~hundreds of

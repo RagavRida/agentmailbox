@@ -12,3 +12,12 @@ export type { Compressor } from "./compression";
 export { createServer, type CreateServerOptions } from "./server";
 export { assembleContext, type AssembleOptions } from "./context";
 export * from "./types";
+export { buildMcpServer } from "./mcp/server";
+export { listToolDefs, runTool } from "./mcp/tools";
+export type {
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+} from "./storage/interface";

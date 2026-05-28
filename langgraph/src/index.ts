@@ -5,3 +5,11 @@ export type {
   PendingWriteWire,
   WritesPayload,
 } from "./types";
+export type {
+  ContextFrame,
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+} from "./saver";

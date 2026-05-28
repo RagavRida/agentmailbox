@@ -38,7 +38,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "agentsmcp": ">=0.3.5 <0.5.0"
+    "agentsmcp": ">=0.4.0 <0.5.0"
   },
   "peerDependencies": {
     "@langchain/langgraph-checkpoint": ">=0.0.10"

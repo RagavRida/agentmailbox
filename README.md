@@ -8,7 +8,7 @@ agent ever starts cold.
 
 [![npm](https://img.shields.io/npm/v/agentsmcp.svg?label=npm%20agentsmcp)](https://www.npmjs.com/package/agentsmcp)
 [![PyPI](https://img.shields.io/pypi/v/agentsmcp.svg?label=PyPI%20agentsmcp)](https://pypi.org/project/agentsmcp/)
-[![npm adapter](https://img.shields.io/npm/v/agentsmcp-adapter.svg?label=npm%20agentsmcp-adapter)](https://www.npmjs.com/package/agentsmcp-adapter)
+[![npm adapter](https://img.shields.io/npm/v/agentsmcp-adapter.svg?label=npm%20agentsmcp-adapter%20(deprecated))](https://www.npmjs.com/package/agentsmcp-adapter)
 [![npm langgraph](https://img.shields.io/npm/v/agentsmcp-langgraph.svg?label=npm%20agentsmcp-langgraph)](https://www.npmjs.com/package/agentsmcp-langgraph)
 [![skills.sh](https://skills.sh/b/RagavRida/agentsmcp)](https://skills.sh/RagavRida/agentsmcp)
 [![CI](https://github.com/RagavRida/agentsmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/RagavRida/agentsmcp/actions/workflows/ci.yml)
@@ -57,7 +57,7 @@ Add to your MCP settings (**Settings → MCP → Add**):
   "mcpServers": {
     "agentsmcp": {
       "command": "npx",
-      "args": ["-y", "agentsmcp-adapter"],
+      "args": ["-y", "agentsmcp"],
       "env": {
         "AGENTSMCP_AGENT_ID": "cursor@local",
         "AGENTSMCP_SERVER": "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
@@ -80,7 +80,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
   "mcpServers": {
     "agentsmcp": {
       "command": "npx",
-      "args": ["-y", "agentsmcp-adapter"],
+      "args": ["-y", "agentsmcp"],
       "env": {
         "AGENTSMCP_AGENT_ID": "claude@desktop",
         "AGENTSMCP_SERVER": "https://hdnxa5c8yr.us-east-1.awsapprunner.com",
@@ -104,7 +104,7 @@ Or add MCP config manually in your settings.
 ### Claude Code
 
 ```bash
-claude mcp add agentsmcp -- npx -y agentsmcp-adapter
+claude mcp add agentsmcp -- npx -y agentsmcp
 ```
 
 Set environment variables:
@@ -118,7 +118,7 @@ AGENTSMCP_API_KEY=sk_live_YOUR_KEY
 ### Any MCP Client (Continue, Cline, Windsurf, …)
 
 AgentMailbox works with any MCP-compatible client. Add the same config
-shape (`command: npx`, `args: ["-y", "agentsmcp-adapter"]`) with the
+shape (`command: npx`, `args: ["-y", "agentsmcp"]`) with the
 three env vars: `AGENTSMCP_AGENT_ID`, `AGENTSMCP_SERVER`,
 `AGENTSMCP_API_KEY`.
 
@@ -405,7 +405,7 @@ at session start, preserve it at session end, and sync across tools.
 | **Antigravity / Gemini CLI** | `npx skills add RagavRida/agentsmcp@antigravity` | [`skills/antigravity/`](./skills/antigravity/) |
 | **Cursor** | Copy `skills/cursor/rules/` to `.cursor/rules/` | [`skills/cursor/`](./skills/cursor/) |
 | **Claude Code** | Add MCP config to settings | [`skills/claude-code/`](./skills/claude-code/) |
-| **Claude Desktop** | Add MCP config (see [Claude Desktop](#claude-desktop)) | Already works via `agentsmcp-adapter` |
+| **Claude Desktop** | Add MCP config (see [Claude Desktop](#claude-desktop)) | Already works via `npx agentsmcp` |
 | **Continue** | Add MCP config to Continue settings | Same adapter, different config path |
 
 **Your context follows you, not the tool.** Start work in Cursor,

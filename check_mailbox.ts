@@ -14,19 +14,19 @@ async function checkAgent(agentId: string, server: string) {
     return {
       agentId,
       server,
-      success: true,
+      success: true as const,
       unreadCount: messages.length,
       threadsCount: threads.length,
       messages,
       context,
       threads
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       agentId,
       server,
-      success: false,
-      error: err.message || err
+      success: false as const,
+      error: err instanceof Error ? err.message : String(err)
     };
   }
 }
@@ -63,13 +63,16 @@ async function main() {
           for (const thread of res.threads) {
             console.log(`  - Thread ID: ${thread.id}`);
             console.log(`    Participants: ${thread.participants?.join(", ")}`);
-            console.log(`    Last Message: ${JSON.stringify(thread.lastMessage)}`);
+            const lastMsg = thread.messages[thread.messages.length - 1];
+            console.log(`    Last Message: ${lastMsg ? JSON.stringify(lastMsg.payload) : "(none)"}`);
+            console.log(`    Message Count: ${thread.messages.length}`);
           }
         }
       } else {
         // Only print if not connection refused
-        if (!res.error.includes("ECONNREFUSED") && !res.error.includes("fetch failed")) {
-          console.log(`Agent: ${agentId} - Error: ${res.error}`);
+        const errMsg = res.error;
+        if (errMsg && !errMsg.includes("ECONNREFUSED") && !errMsg.includes("fetch failed")) {
+          console.log(`Agent: ${agentId} - Error: ${errMsg}`);
         }
       }
     }

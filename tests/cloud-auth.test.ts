@@ -43,7 +43,10 @@ describe("cloud/auth — key generation", () => {
   it("safeHashEquals is true for matching hashes, false otherwise", () => {
     const { hash } = generateApiKey();
     expect(safeHashEquals(hash, hash)).toBe(true);
-    expect(safeHashEquals(hash, hash.replace(/.$/, "0"))).toBe(false);
+    // Deterministically flip the last hex char so it's always different
+    const lastChar = hash[hash.length - 1];
+    const flipped = hash.slice(0, -1) + (lastChar === "0" ? "1" : "0");
+    expect(safeHashEquals(hash, flipped)).toBe(false);
     expect(safeHashEquals(hash, "")).toBe(false);
   });
 });

@@ -196,7 +196,8 @@ export interface GraphNode {
   type: GraphNodeType;
   name: string;
   description?: string;
-  metadata: Record<string, unknown>;
+  /** Arbitrary extra data. Optional — not every node needs it. */
+  metadata?: Record<string, unknown>;
   updatedAt: number;
 }
 
@@ -204,7 +205,8 @@ export interface GraphEdge {
   sourceId: string;
   targetId: string;
   type: string;
-  weight: number;
+  /** Traversal weight. Defaults to 1.0 when omitted. */
+  weight?: number;
 }
 
 // ---------- Codebase Index types ----------
@@ -220,6 +222,7 @@ export interface CodebaseIndexEntry {
   key: string;
   category: IndexCategory;
   summary: string;
-  metadata: Record<string, unknown>;
+  /** Arbitrary extra data. Optional — not every entry needs it. */
+  metadata?: Record<string, unknown>;
   updatedAt: number;
 }

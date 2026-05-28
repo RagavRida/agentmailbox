@@ -7,7 +7,7 @@ on:
 
 jobs:
   js:
-    name: JS (server + SDK)
+    name: JS (server + SDK + MCP)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,27 +18,9 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
-
-  mcp:
-    name: MCP adapter
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcp
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: Install root deps (parent SDK)
-        run: npm ci
-        working-directory: .
-      - name: Build parent SDK
-        run: npm run build
-        working-directory: .
-      - run: npm ci
-      - run: npx tsc --noEmit
       - run: npm run build
+      - name: Verify MCP bin has shebang
+        run: head -1 dist/mcp/index.js | grep -q '#!/usr/bin/env node'
 
   python:
     name: Python ${{ matrix.python }}
@@ -62,3 +44,4 @@ jobs:
         working-directory: sdk-py
       - run: pytest -q
         working-directory: sdk-py
+

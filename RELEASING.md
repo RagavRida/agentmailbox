@@ -1,6 +1,6 @@
-# Releasing AgentMailbox 0.1.0
+# Releasing AgentsMCP
 
-Reference commands for the human cutting the first release. **Do not
+Reference commands for the human cutting a release. **Do not
 let CI run these — review the PR, then run them manually.**
 
 ## Pre-flight
@@ -8,33 +8,49 @@ let CI run these — review the PR, then run them manually.**
 - All CI green on `main`.
 - `CHANGELOG.md` updated.
 - Versions bumped in:
-  - `package.json`
-  - `mcp/package.json`
-  - `sdk-py/pyproject.toml`
+  - `package.json` (main SDK + MCP adapter)
+  - `mcp/package.json` (deprecated shim — bump if publishing)
+  - `sdk-py/pyproject.toml` (Python SDK)
+  - `langgraph/package.json` (LangGraph adapter)
 - Logged into `npm whoami` and `twine` (or have a `~/.pypirc`).
+- E2E smoke passes: `npm run smoke:e2e`
 
-## npm (`agentmailbox`)
+## npm (`agentsmcp`)
 
 ```bash
 cd ~/agentmailbox
 npm ci
 npm run build
 npm test
-npm pack --dry-run    # inspect the file list — should be dist/, README, LICENSE, package.json only
+npm run smoke:e2e
+npm pack --dry-run    # inspect: dist/, README, LICENSE, package.json
 npm publish --access public
 ```
 
-## npm (`agentmailbox-mcp`)
+## npm (`agentsmcp-adapter` — deprecated shim)
+
+Only needed if the shim itself changed. Usually skip this.
 
 ```bash
 cd ~/agentmailbox/mcp
 npm ci
 npm run build
 npm pack --dry-run
+npm publish --access public --tag deprecated
+```
+
+## npm (`agentsmcp-langgraph`)
+
+```bash
+cd ~/agentmailbox/langgraph
+npm ci
+npm run build
+npm test
+npm pack --dry-run
 npm publish --access public
 ```
 
-## PyPI (`agentmailbox`)
+## PyPI (`agentsmcp`)
 
 ```bash
 cd ~/agentmailbox/sdk-py
@@ -48,26 +64,29 @@ python -m venv .venv
 ## Post-publish
 
 ```bash
-git tag v0.1.0
+git tag v0.4.0
 git push --tags
 ```
 
 Cut a GitHub release with the relevant CHANGELOG excerpt.
 
-Smoke test from a fresh directory on a fresh machine:
+Smoke test from a fresh directory:
 
 ```bash
-# JS server + SDK
-npx -y agentmailbox-server &
+# JS server
+npx -y agentsmcp-server &
 sleep 2 && curl -sf http://localhost:3000/health
 
+# MCP adapter (same package now)
+npx -y agentsmcp --help
+
 # Python SDK
-pip install agentmailbox
+pip install agentsmcp
 python -c "from agentmailbox import AgentMailbox; print('ok')"
 
-# MCP adapter
-npx -y agentmailbox-mcp --help
+# Legacy adapter shim (should still work)
+npx -y agentsmcp-adapter --help
 ```
 
 If any of those fail, yank the bad version (`npm unpublish` within 72h,
-`twine` has no equivalent — bump to `0.1.1` instead) and start over.
+`twine` has no equivalent — bump patch version instead) and start over.

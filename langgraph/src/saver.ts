@@ -12,7 +12,15 @@ import {
   type SerializerProtocol,
 } from "@langchain/langgraph-checkpoint";
 import { AgentMailbox } from "agentsmcp";
-import type { ContextFrame, Message } from "agentsmcp";
+import type {
+  ContextFrame,
+  Message,
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+} from "agentsmcp";
 
 import {
   CheckpointContext,
@@ -377,6 +385,80 @@ export class AgentsmcpSaver extends BaseCheckpointSaver {
     }
     return tuple;
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Context Graph
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Register a context graph node for this LangGraph agent.
+   * Persists across restarts so future invocations can query the graph
+   * instead of re-reading files or re-computing context.
+   */
+  async upsertNode(
+    node: Omit<GraphNode, "updatedAt">
+  ): Promise<void> {
+    await this.connect();
+    return this.mail.upsertNode(node);
+  }
+
+  /**
+   * Connect two graph nodes with a typed, directed edge.
+   * Edge types: references, contains, resolves, depends_on, semantic.
+   */
+  async addEdge(edge: GraphEdge): Promise<void> {
+    await this.connect();
+    return this.mail.addEdge(edge);
+  }
+
+  /**
+   * Search the context graph by keywords.
+   * Returns matching nodes plus all nodes reachable within 2 hops.
+   */
+  async queryGraph(
+    query: string
+  ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+    await this.connect();
+    return this.mail.queryGraph(query);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Codebase Index
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Register or update a codebase index entry (file summary, symbol
+   * summary, API contract, config description, or architecture note).
+   * Future graph invocations can look it up instead of reading the
+   * full file.
+   */
+  async upsertIndex(
+    entry: Omit<CodebaseIndexEntry, "updatedAt">
+  ): Promise<void> {
+    await this.connect();
+    return this.mail.upsertIndex(entry);
+  }
+
+  /**
+   * Look up a specific codebase index entry by its exact key.
+   * Returns `null` if the key doesn't exist.
+   */
+  async getIndex(key: string): Promise<CodebaseIndexEntry | null> {
+    await this.connect();
+    return this.mail.getIndex(key);
+  }
+
+  /**
+   * Search the codebase index by keywords, optionally filtered by
+   * category ("file" | "symbol" | "api" | "config" | "architecture").
+   */
+  async searchIndex(
+    query: string,
+    category?: IndexCategory
+  ): Promise<CodebaseIndexEntry[]> {
+    await this.connect();
+    return this.mail.searchIndex(query, category);
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -413,7 +495,13 @@ function isWritesPayload(p: unknown): p is WritesPayload {
   );
 }
 
-// Avoid an unused-symbol lint when ContextFrame import resolves to a
-// type that vitest's strict isolatedModules check can't see in this
-// file. Keep the import for downstream type compatibility.
-export type { ContextFrame };
+// Re-export graph/index types so callers don't need a separate import
+// from agentsmcp just to annotate node/edge/entry parameters.
+export type {
+  ContextFrame,
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  CodebaseIndexEntry,
+  IndexCategory,
+};

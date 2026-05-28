@@ -1,7 +1,7 @@
 {
   "name": "agentsmcp-adapter",
-  "version": "0.1.2",
-  "description": "MCP server adapter for agentsmcp (AgentMailbox)",
+  "version": "0.2.0",
+  "description": "DEPRECATED — use 'npx agentsmcp' instead. Thin shim that delegates to the main agentsmcp package.",
   "bin": {
     "agentsmcp-adapter": "dist/index.js"
   },
@@ -39,11 +39,9 @@
   "engines": {
     "node": ">=18"
   },
+  "deprecated": "Use 'npx agentsmcp' directly. This package is a thin shim.",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "agentsmcp": ">=0.2.1 <0.4.0",
-    "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.23.0"
+    "agentsmcp": ">=0.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",

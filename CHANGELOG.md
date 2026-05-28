@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.4.0 — 2026-05-28
+
+### Changed (breaking)
+
+- **MCP adapter merged into the main package.** `npx agentsmcp` now
+  starts the MCP stdio adapter — no separate `agentsmcp-adapter`
+  package needed. One package, one command, zero friction.
+- **`agentsmcp-adapter` deprecated.** The package still works (it's now
+  a thin shim that delegates to `agentsmcp`), but all documentation
+  points to `npx agentsmcp` as the primary entry point.
+- **Legacy `AGENTMAILBOX_*` env vars removed.** As announced in the 0.3.3
+  changelog, the old env var names are no longer read by the MCP adapter.
+  Use `AGENTSMCP_AGENT_ID`, `AGENTSMCP_SERVER`, `AGENTSMCP_API_KEY`.
+
+### Added
+
+- New bin `agentsmcp` in the main package — starts the MCP adapter in
+  stdio mode. This is what MCP clients (Cursor, Claude Desktop,
+  Windsurf, Continue, etc.) should point at.
+- `buildMcpServer`, `listToolDefs`, and `runTool` are now exported from
+  the main barrel for programmatic embedding of the MCP server.
+- `@modelcontextprotocol/sdk` and `zod-to-json-schema` moved into the
+  main package's dependencies (previously only in the adapter).
+- **7 new MCP tools** (15 total, up from 8):
+  - `agentsmcp_upsert_node` — register a context graph node
+  - `agentsmcp_add_edge` — connect two graph nodes with a typed edge
+  - `agentsmcp_query_graph` — keyword search the context graph
+  - `agentsmcp_upsert_index` — register a codebase index entry
+  - `agentsmcp_get_index` — look up an index entry by key
+  - `agentsmcp_search_index` — keyword search the codebase index
+  - `agentsmcp_context_briefing` — targeted context briefing for a task
+- **Context graph + codebase index exported** from the main barrel:
+  `GraphNode`, `GraphEdge`, `GraphNodeType`, `CodebaseIndexEntry`,
+  `IndexCategory`.
+- **26 new tests** covering the entire MCP layer (tools, resources,
+  server) in `tests/mcp-tools.test.ts`, `tests/mcp-resources.test.ts`,
+  and `tests/mcp-server.test.ts`.
+- **E2E smoke test** (`scripts/smoke-e2e.js`) — run via
+  `npm run smoke:e2e`. Boots a real server, exercises 12 steps
+  end-to-end against the compiled `dist/`.
+
+### Fixed
+
+- `mcp/src/tools.ts`: Replaced `require("zod-to-json-schema")` with
+  proper `import` statement (lint fix).
+- `check_mailbox.ts`: Replaced `catch (err: any)` with
+  `catch (err: unknown)` and proper type narrowing (lint fix).
+- `GraphNode.metadata`, `CodebaseIndexEntry.metadata`, and
+  `GraphEdge.weight` are now **optional** in the interface — callers no
+  longer need to pass `metadata: {}` boilerplate.
+- `tests/cloud-auth.test.ts`: Fixed a flaky test where
+  `safeHashEquals` would spuriously pass (~1/16 runs) when the
+  generated SHA-256 hash happened to end with `"0"`. Now uses a
+  deterministic flip instead of regex substitution.
+
+
+### Migration
+
+```diff
+ {
+   "mcpServers": {
+     "agentsmcp": {
+       "command": "npx",
+-      "args": ["-y", "agentsmcp-adapter"],
++      "args": ["-y", "agentsmcp"],
+       "env": {
+-        "AGENTMAILBOX_AGENT_ID": "cursor@local",
+-        "AGENTMAILBOX_SERVER": "http://localhost:3000"
++        "AGENTSMCP_AGENT_ID": "cursor@local",
++        "AGENTSMCP_SERVER": "http://localhost:3000"
+       }
+     }
+   }
+ }
+```
+
 ## 0.3.7 — 2026-05-16
 
 ### Added

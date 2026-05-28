@@ -178,3 +178,108 @@ describe("AgentsmcpSaver", () => {
     expect(child!.checkpoint.channel_values).toEqual({ from: "child" });
   });
 });
+
+describe("AgentsmcpSaver — context graph", () => {
+  it("upsertNode + queryGraph round-trip", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@graph" });
+    await saver.connect();
+
+    await saver.upsertNode({
+      id: "file:graph-runner.ts",
+      type: "file",
+      name: "graph-runner.ts",
+      description: "LangGraph state machine entrypoint",
+      metadata: { exports: ["runGraph"] },
+    });
+
+    const result = await saver.queryGraph("graph-runner");
+    expect(result.nodes.length).toBeGreaterThanOrEqual(1);
+    expect(result.nodes.some((n) => n.id === "file:graph-runner.ts")).toBe(true);
+  });
+
+  it("addEdge links two nodes and appears in queryGraph result", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@graph" });
+    await saver.connect();
+
+    await saver.upsertNode({ id: "file:agent.ts", type: "file", name: "agent.ts" });
+    await saver.upsertNode({ id: "symbol:runAgent", type: "symbol", name: "runAgent" });
+    await saver.addEdge({
+      sourceId: "file:agent.ts",
+      targetId: "symbol:runAgent",
+      type: "contains",
+      weight: 1.0,
+    });
+
+    const result = await saver.queryGraph("runAgent");
+    expect(result.edges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("queryGraph returns empty arrays for no match", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@graph" });
+    await saver.connect();
+
+    const result = await saver.queryGraph("zzz-nonexistent-zzz");
+    expect(result.nodes).toEqual([]);
+    expect(result.edges).toEqual([]);
+  });
+});
+
+describe("AgentsmcpSaver — codebase index", () => {
+  it("upsertIndex + getIndex round-trip", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@index" });
+    await saver.connect();
+
+    await saver.upsertIndex({
+      key: "file:state-machine.ts",
+      category: "file",
+      summary: "LangGraph state machine with parallel node execution",
+      metadata: { lineCount: 320 },
+    });
+
+    const entry = await saver.getIndex("file:state-machine.ts");
+    expect(entry).not.toBeNull();
+    expect(entry!.key).toBe("file:state-machine.ts");
+    expect(entry!.category).toBe("file");
+    expect(entry!.summary).toContain("LangGraph");
+  });
+
+  it("getIndex returns null for a missing key", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@index" });
+    await saver.connect();
+
+    const entry = await saver.getIndex("nonexistent:key");
+    expect(entry).toBeNull();
+  });
+
+  it("searchIndex finds entries by keyword", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@index" });
+    await saver.connect();
+
+    await saver.upsertIndex({
+      key: "api:POST /invoke",
+      category: "api",
+      summary: "Invokes the compiled LangGraph graph with input state",
+    });
+    await saver.upsertIndex({
+      key: "file:graph.ts",
+      category: "file",
+      summary: "Graph definition and node wiring for the LangGraph pipeline",
+    });
+
+    const results = await saver.searchIndex("LangGraph");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("searchIndex filters by category", async () => {
+    const saver = new AgentsmcpSaver({ server: server.url, agentId: "lg@index" });
+    await saver.connect();
+
+    await saver.upsertIndex({ key: "file:x.ts",   category: "file",   summary: "LangGraph file entry" });
+    await saver.upsertIndex({ key: "api:POST /x", category: "api",    summary: "LangGraph API entry" });
+    await saver.upsertIndex({ key: "sym:x",       category: "symbol", summary: "LangGraph symbol entry" });
+
+    const apiOnly = await saver.searchIndex("LangGraph", "api");
+    expect(apiOnly.every((e) => e.category === "api")).toBe(true);
+  });
+});
+
