@@ -9,8 +9,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .types import (
+    CodebaseIndexEntry,
     Context,
     ContextFrame,
+    GraphEdge,
+    GraphNode,
+    GraphQueryResult,
     Message,
     ParticipantRole,
     Role,
@@ -164,3 +168,48 @@ def reply_all_body(
             "contextSnapshot": context_snapshot,
         }
     )
+
+
+# ---------- Context Graph ----------
+
+def graph_node_from_json(d: Dict[str, Any]) -> GraphNode:
+    return GraphNode(
+        id=d["id"],
+        type=d["type"],
+        name=d["name"],
+        description=d.get("description"),
+        metadata=d.get("metadata"),
+        updated_at=int(d.get("updatedAt", 0)),
+    )
+
+
+def graph_edge_from_json(d: Dict[str, Any]) -> GraphEdge:
+    return GraphEdge(
+        source_id=d["sourceId"],
+        target_id=d["targetId"],
+        type=d["type"],
+        weight=float(d.get("weight", 1.0)),
+    )
+
+
+def graph_query_result_from_json(d: Dict[str, Any]) -> GraphQueryResult:
+    return GraphQueryResult(
+        nodes=[graph_node_from_json(n) for n in d.get("nodes") or []],
+        edges=[graph_edge_from_json(e) for e in d.get("edges") or []],
+    )
+
+
+# ---------- Codebase Index ----------
+
+def index_entry_from_json(d: Dict[str, Any]) -> CodebaseIndexEntry:
+    return CodebaseIndexEntry(
+        key=d["key"],
+        category=d["category"],
+        summary=d.get("summary") or "",
+        metadata=d.get("metadata"),
+        updated_at=int(d.get("updatedAt", 0)),
+    )
+
+
+def index_entries_from_json(d: Dict[str, Any]) -> List[CodebaseIndexEntry]:
+    return [index_entry_from_json(e) for e in d.get("entries") or []]

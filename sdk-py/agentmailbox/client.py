@@ -17,8 +17,14 @@ from .exceptions import (
     ServerError,
 )
 from .types import (
+    CodebaseIndexEntry,
     Context,
     ContextFrame,
+    GraphEdge,
+    GraphNode,
+    GraphNodeType,
+    GraphQueryResult,
+    IndexCategory,
     Message,
     ParticipantRole,
     ReceiveResult,
@@ -203,6 +209,91 @@ class AgentMailbox:
         path = f"/mailbox/{quote(self.agent_id, safe='')}/read"
         await self._request("POST", path, _ignore, json={"threadId": thread_id})
 
+    # --- Context Graph ---
+
+    async def upsert_node(
+        self,
+        id: str,
+        type: GraphNodeType,
+        name: str,
+        *,
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Register or update a context graph node."""
+        body = _codec.drop_none(
+            {
+                "id": id,
+                "type": type,
+                "name": name,
+                "description": description,
+                "metadata": metadata,
+            }
+        )
+        path = f"/mailbox/{quote(self.agent_id, safe='')}/graph/nodes"
+        await self._request("POST", path, _ignore, json=body)
+
+    async def add_edge(
+        self,
+        source_id: str,
+        target_id: str,
+        type: str,
+        *,
+        weight: float = 1.0,
+    ) -> None:
+        """Connect two graph nodes with a typed directed edge."""
+        body = {"sourceId": source_id, "targetId": target_id, "type": type, "weight": weight}
+        path = f"/mailbox/{quote(self.agent_id, safe='')}/graph/edges"
+        await self._request("POST", path, _ignore, json=body)
+
+    async def query_graph(self, query: str) -> GraphQueryResult:
+        """Keyword-search the context graph. Returns matching nodes + 2-hop edges."""
+        path = (
+            f"/mailbox/{quote(self.agent_id, safe='')}/graph/query"
+            f"?q={quote(query, safe='')}"
+        )
+        return await self._request("GET", path, _codec.graph_query_result_from_json)
+
+    # --- Codebase Index ---
+
+    async def upsert_index(
+        self,
+        key: str,
+        category: IndexCategory,
+        summary: str,
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Register or update a codebase index entry."""
+        body = _codec.drop_none(
+            {"key": key, "category": category, "summary": summary, "metadata": metadata}
+        )
+        path = f"/mailbox/{quote(self.agent_id, safe='')}/index"
+        await self._request("POST", path, _ignore, json=body)
+
+    async def get_index(self, key: str) -> Optional[CodebaseIndexEntry]:
+        """Look up a codebase index entry by exact key. Returns None if missing."""
+        path = f"/mailbox/{quote(self.agent_id, safe='')}/index/{quote(key, safe='')}"
+        try:
+            return await self._request("GET", path, _codec.index_entry_from_json)
+        except NotFoundError:
+            return None
+
+    async def search_index(
+        self,
+        query: str,
+        *,
+        category: Optional[IndexCategory] = None,
+    ) -> List[CodebaseIndexEntry]:
+        """Keyword-search the codebase index, optionally filtered by category."""
+        path = (
+            f"/mailbox/{quote(self.agent_id, safe='')}/index"
+            f"?q={quote(query, safe='')}"
+        )
+        if category:
+            path += f"&category={quote(category, safe='')}"
+        return await self._request("GET", path, _codec.index_entries_from_json)
+
 
 class AgentMailboxSync:
     """Sync wrapper around :class:`AgentMailbox` for non-async code paths.
@@ -295,3 +386,48 @@ class AgentMailboxSync:
 
     def mark_read(self, thread_id: str) -> None:
         self._run("mark_read", thread_id)
+
+    def upsert_node(
+        self,
+        id: str,
+        type: GraphNodeType,
+        name: str,
+        *,
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self._run("upsert_node", id, type, name, description=description, metadata=metadata)
+
+    def add_edge(
+        self,
+        source_id: str,
+        target_id: str,
+        type: str,
+        *,
+        weight: float = 1.0,
+    ) -> None:
+        self._run("add_edge", source_id, target_id, type, weight=weight)
+
+    def query_graph(self, query: str) -> GraphQueryResult:
+        return self._run("query_graph", query)
+
+    def upsert_index(
+        self,
+        key: str,
+        category: IndexCategory,
+        summary: str,
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self._run("upsert_index", key, category, summary, metadata=metadata)
+
+    def get_index(self, key: str) -> Optional[CodebaseIndexEntry]:
+        return self._run("get_index", key)
+
+    def search_index(
+        self,
+        query: str,
+        *,
+        category: Optional[IndexCategory] = None,
+    ) -> List[CodebaseIndexEntry]:
+        return self._run("search_index", query, category=category)

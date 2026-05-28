@@ -12,8 +12,14 @@ from .exceptions import (
     ServerError,
 )
 from .types import (
+    CodebaseIndexEntry,
     Context,
     ContextFrame,
+    GraphEdge,
+    GraphNode,
+    GraphNodeType,
+    GraphQueryResult,
+    IndexCategory,
     Message,
     ParticipantRole,
     ReceiveResult,
@@ -23,7 +29,7 @@ from .types import (
     ThreadSummary,
 )
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "AgentMailbox",
@@ -32,6 +38,7 @@ __all__ = [
     "ConnectionError",
     "NotFoundError",
     "ServerError",
+    # messaging
     "Context",
     "ContextFrame",
     "Message",
@@ -41,5 +48,13 @@ __all__ = [
     "SendResult",
     "Thread",
     "ThreadSummary",
+    # context graph
+    "GraphNode",
+    "GraphEdge",
+    "GraphNodeType",
+    "GraphQueryResult",
+    # codebase index
+    "CodebaseIndexEntry",
+    "IndexCategory",
     "__version__",
 ]
