@@ -29,10 +29,17 @@ export interface AssembleOptions {
   storage?: Storage;
   compressor?: Compressor;
   /**
-   * Compress only once `messages.length - RECENT_LIMIT` exceeds this number
+   * Compress only once `messages.length - recentLimit` exceeds this number
    * of *uncovered* older messages. Defaults to 20.
    */
   compressionThreshold?: number;
+  /**
+   * How many of the most-recent messages to include verbatim in the context
+   * window. Smaller values burn fewer tokens on large-payload threads.
+   * Defaults to 10. Pass 3–5 for MCP tool calls where a lightweight
+   * snapshot is enough.
+   */
+  recentLimit?: number;
 }
 
 function fallbackSummaryText(older: Message[]): string {
@@ -56,9 +63,10 @@ export async function assembleContext(
   messages: Message[],
   opts: AssembleOptions = {}
 ): Promise<ThreadContext> {
+  const recentLimit = opts.recentLimit ?? RECENT_LIMIT;
   const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
-  const recentMessages = sorted.slice(-RECENT_LIMIT);
-  const olderMessages = sorted.slice(0, Math.max(0, sorted.length - RECENT_LIMIT));
+  const recentMessages = sorted.slice(-recentLimit);
+  const olderMessages = sorted.slice(0, Math.max(0, sorted.length - recentLimit));
 
   const last = sorted[sorted.length - 1];
   const snapshot: Record<string, unknown> = last ? { ...last.contextSnapshot } : {};

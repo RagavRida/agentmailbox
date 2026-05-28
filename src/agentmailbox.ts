@@ -99,10 +99,14 @@ export class AgentMailbox {
     });
   }
 
-  async receive(from?: AgentAddress): Promise<ReceiveResult> {
+  async receive(
+    from?: AgentAddress,
+    opts: { recent?: number } = {}
+  ): Promise<ReceiveResult> {
+    const recentParam = opts.recent != null ? `?recent=${opts.recent}` : "";
     const { messages } = await this.request<{ messages: ContextFrame[] }>(
       "GET",
-      `/mailbox/${encodeURIComponent(this.agentId)}/unread`
+      `/mailbox/${encodeURIComponent(this.agentId)}/unread${recentParam}`
     );
     const filtered = from ? messages.filter((m) => m.from === from) : messages;
 
@@ -129,7 +133,10 @@ export class AgentMailbox {
     return messages;
   }
 
-  async sync(threadId: string): Promise<{
+  async sync(
+    threadId: string,
+    opts: { recent?: number } = {}
+  ): Promise<{
     context: {
       snapshot: Record<string, unknown>;
       threadSummary: string;
@@ -138,6 +145,7 @@ export class AgentMailbox {
       tokenCount?: number;
     };
   }> {
+    const recentParam = opts.recent != null ? `&recent=${opts.recent}` : "";
     return this.request<{
       context: {
         snapshot: Record<string, unknown>;
@@ -150,7 +158,7 @@ export class AgentMailbox {
       "GET",
       `/threads/${encodeURIComponent(threadId)}/sync?as=${encodeURIComponent(
         this.agentId
-      )}`
+      )}${recentParam}`
     );
   }
 
@@ -203,12 +211,12 @@ export class AgentMailbox {
   }
 
   async queryGraph(
-    query: string
+    query: string,
+    opts: { limit?: number } = {}
   ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
-    return this.request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
-      "GET",
-      `/mailbox/${encodeURIComponent(this.agentId)}/graph/query?q=${encodeURIComponent(query)}`
-    );
+    let path = `/mailbox/${encodeURIComponent(this.agentId)}/graph/query?q=${encodeURIComponent(query)}`;
+    if (opts.limit != null) path += `&limit=${opts.limit}`;
+    return this.request<{ nodes: GraphNode[]; edges: GraphEdge[] }>("GET", path);
   }
 
   // ---------- Codebase Index ----------
@@ -236,14 +244,13 @@ export class AgentMailbox {
 
   async searchIndex(
     query: string,
-    category?: string
+    category?: string,
+    opts: { limit?: number } = {}
   ): Promise<CodebaseIndexEntry[]> {
     let path = `/mailbox/${encodeURIComponent(this.agentId)}/index?q=${encodeURIComponent(query)}`;
     if (category) path += `&category=${encodeURIComponent(category)}`;
-    const res = await this.request<{ entries: CodebaseIndexEntry[] }>(
-      "GET",
-      path
-    );
+    if (opts.limit != null) path += `&limit=${opts.limit}`;
+    const res = await this.request<{ entries: CodebaseIndexEntry[] }>("GET", path);
     return res.entries;
   }
 }

@@ -1149,6 +1149,12 @@ export function createServer(
     try {
       const agentId = req.params.agentId;
       const s = storageFor(req);
+      // ?recent=N — cap the verbatim message window to save tokens.
+      // Default 10 (historical). MCP callers should prefer 3-5.
+      const recentLimit = Math.min(
+        Math.max(1, Number(req.query.recent ?? 10)),
+        50 // hard ceiling to prevent abuse
+      );
       const unread = await s.getUnread(agentId);
       const frames: ContextFrame[] = await Promise.all(
         unread.map(async (m) => {
@@ -1158,6 +1164,7 @@ export function createServer(
             storage: s,
             compressor,
             compressionThreshold,
+            recentLimit,
           });
           const frame: ContextFrame = {
             id: m.id,
@@ -1238,11 +1245,17 @@ export function createServer(
       const thread = await s.getThread(req.params.threadId);
       if (!thread) return res.status(404).json({ error: "thread not found" });
       const requester = (req.query.as as string | undefined) ?? "";
+      // ?recent=N — cap the verbatim message window. Default 10.
+      const recentLimit = Math.min(
+        Math.max(1, Number(req.query.recent ?? 10)),
+        50
+      );
       const ctx = await assembleContext(thread.messages, {
         threadId: thread.id,
         storage: s,
         compressor,
         compressionThreshold,
+        recentLimit,
       });
       const responseContext: Record<string, unknown> = {
         snapshot: ctx.snapshot,
@@ -1336,7 +1349,7 @@ export function createServer(
     }
   });
 
-  // GET /mailbox/:agentId/graph/query?q=... — query graph with 2-hop traversal
+  // GET /mailbox/:agentId/graph/query?q=...&limit=N — keyword search + 2-hop traversal
   app.get("/mailbox/:agentId/graph/query", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const agentId = req.params.agentId;
@@ -1344,8 +1357,20 @@ export function createServer(
       if (!q) {
         return res.status(400).json({ error: "q query parameter is required" });
       }
+      // ?limit=N — cap total nodes returned. Default 30, max 100.
+      const limit = Math.min(
+        Math.max(1, Number(req.query.limit ?? 30)),
+        100
+      );
       const result = await storageFor(req).queryGraph(agentId, q);
-      return res.status(200).json(result);
+      // Apply limit after traversal (storage layer does the traversal;
+      // we slice here to avoid breaking the Storage interface contract).
+      const slicedNodes = result.nodes.slice(0, limit);
+      const nodeIds = new Set(slicedNodes.map((n) => n.id));
+      const slicedEdges = result.edges.filter(
+        (e) => nodeIds.has(e.sourceId) && nodeIds.has(e.targetId)
+      );
+      return res.status(200).json({ nodes: slicedNodes, edges: slicedEdges });
     } catch (e) {
       next(e);
     }
@@ -1386,7 +1411,7 @@ export function createServer(
     }
   });
 
-  // GET /mailbox/:agentId/index?q=...&category=... — search index entries
+  // GET /mailbox/:agentId/index?q=...&category=...&limit=N — search index entries
   app.get("/mailbox/:agentId/index", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const agentId = req.params.agentId;
@@ -1395,7 +1420,13 @@ export function createServer(
       if (!q) {
         return res.status(400).json({ error: "q query parameter is required" });
       }
-      const entries = await storageFor(req).searchIndex(agentId, q, category);
+      // ?limit=N — cap result count. Default 20, max 100.
+      const limit = Math.min(
+        Math.max(1, Number(req.query.limit ?? 20)),
+        100
+      );
+      const all = await storageFor(req).searchIndex(agentId, q, category);
+      const entries = all.slice(0, limit);
       return res.status(200).json({ entries });
     } catch (e) {
       next(e);

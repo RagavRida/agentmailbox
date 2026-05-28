@@ -32,6 +32,8 @@ const SendInput = z.object({
 
 const ReceiveInput = z.object({
   from: z.string().optional().describe("Filter to messages from this sender"),
+  recent: z.number().int().min(1).max(50).optional()
+    .describe("Max recent messages to include in each context frame (default 3, max 50). Lower = fewer tokens."),
 });
 
 const EmptyInput = z.object({}).strict();
@@ -67,6 +69,8 @@ const AddEdgeInput = z.object({
 
 const QueryGraphInput = z.object({
   query: z.string().min(1).describe("Search keywords to match against node names and descriptions"),
+  limit: z.number().int().min(1).max(100).optional()
+    .describe("Max nodes to return (default 30). Lower = fewer tokens."),
 });
 
 const UpsertIndexInput = z.object({
@@ -83,6 +87,8 @@ const GetIndexInput = z.object({
 const SearchIndexInput = z.object({
   query: z.string().min(1).describe("Search keywords"),
   category: z.enum(["file", "symbol", "api", "config", "architecture"]).optional().describe("Optional category filter"),
+  limit: z.number().int().min(1).max(100).optional()
+    .describe("Max results to return (default 20). Lower = fewer tokens."),
 });
 
 const ContextBriefingInput = z.object({
@@ -123,11 +129,13 @@ const TOOL_DEFS: ToolDef[] = [
     name: "agentsmcp_receive",
     description:
       "Get unread messages addressed to this agent, with full thread context " +
-      "attached to each. Use this at the start of a turn to pick up cold.",
+      "attached to each. Use this at the start of a turn to pick up cold. " +
+      "Pass recent=3 (default) to keep context compact; increase only when " +
+      "you need deeper history.",
     schema: ReceiveInput,
     handler: async (agent, raw) => {
       const args = ReceiveInput.parse(raw);
-      return agent.receive(args.from);
+      return agent.receive(args.from, { recent: args.recent ?? 3 });
     },
   },
   {
@@ -242,11 +250,12 @@ const TOOL_DEFS: ToolDef[] = [
       "Search the context graph by keywords and return matching nodes plus " +
       "all nodes reachable within 2 hops. Use this INSTEAD of grepping and " +
       "reading files — it returns structured context (files, symbols, " +
-      "decisions, tasks) with their relationships.",
+      "decisions, tasks) with their relationships. Use limit to control " +
+      "result size (default 30).",
     schema: QueryGraphInput,
     handler: async (agent, raw) => {
-      const { query } = QueryGraphInput.parse(raw);
-      return agent.queryGraph(query);
+      const { query, limit } = QueryGraphInput.parse(raw);
+      return agent.queryGraph(query, { limit });
     },
   },
 
@@ -290,11 +299,12 @@ const TOOL_DEFS: ToolDef[] = [
     description:
       "Search the codebase index by keywords, optionally filtered by " +
       "category. Use this INSTEAD of grepping the codebase — it returns " +
-      "concise summaries of matching files, symbols, and APIs.",
+      "concise summaries of matching files, symbols, and APIs. Use limit " +
+      "to control result size (default 20).",
     schema: SearchIndexInput,
     handler: async (agent, raw) => {
       const args = SearchIndexInput.parse(raw);
-      return agent.searchIndex(args.query, args.category);
+      return agent.searchIndex(args.query, args.category, { limit: args.limit });
     },
   },
 
